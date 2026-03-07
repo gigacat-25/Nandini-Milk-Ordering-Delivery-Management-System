@@ -3,7 +3,7 @@
 -- Users' IDs will be Clerk User IDs (e.g. 'user_2xyz...'), which are TEXT strings.
 
 -- 1. Users table
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
   id TEXT PRIMARY KEY, -- Clerk User ID
   phone TEXT,
   email TEXT,
@@ -14,7 +14,7 @@ CREATE TABLE public.users (
 );
 
 -- 2. Products table
-CREATE TABLE public.products (
+CREATE TABLE IF NOT EXISTS public.products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   category TEXT NOT NULL CHECK (category IN ('Milk', 'Curd', 'Ghee')),
@@ -37,7 +37,7 @@ INSERT INTO public.products (name, category, size_label, price, stock_qty) VALUE
 ('Nandini Pure Ghee', 'Ghee', '200ml Jar', 140.00, 20);
 
 -- 3. Orders table
-CREATE TABLE public.orders (
+CREATE TABLE IF NOT EXISTS public.orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   customer_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'delivered', 'cancelled')),
@@ -47,7 +47,7 @@ CREATE TABLE public.orders (
 );
 
 -- 4. Order Items table
-CREATE TABLE public.order_items (
+CREATE TABLE IF NOT EXISTS public.order_items (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES public.products(id),
@@ -57,7 +57,7 @@ CREATE TABLE public.order_items (
 );
 
 -- 5. Subscriptions table
-CREATE TABLE public.subscriptions (
+CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   customer_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES public.products(id),
@@ -69,7 +69,7 @@ CREATE TABLE public.subscriptions (
 );
 
 -- 6. Deliveries table (Optional, for tracking historical completed daily drops)
-CREATE TABLE public.deliveries (
+CREATE TABLE IF NOT EXISTS public.deliveries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   customer_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   subscription_id UUID REFERENCES public.subscriptions(id) ON DELETE SET NULL,
@@ -87,3 +87,9 @@ ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deliveries DISABLE ROW LEVEL SECURITY;
+
+-- Grant access to Supabase API roles (anon and authenticated)
+-- This is necessary because recreating the schema clears the default API permissions
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;

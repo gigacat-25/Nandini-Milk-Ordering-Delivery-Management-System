@@ -117,3 +117,29 @@ export async function createSubscription(customerId, productId, quantity, freque
     if (error) throw error
     return data
 }
+
+export async function upsertUser(clerkUser) {
+    if (!clerkUser) return null
+
+    const email = clerkUser.primaryEmailAddress?.emailAddress || null
+    const phone = clerkUser.primaryPhoneNumber?.phoneNumber || null
+    let fullName = clerkUser.fullName
+    if (!fullName && clerkUser.firstName) fullName = `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim()
+
+    const { data, error } = await supabase
+        .from('users')
+        .upsert({
+            id: clerkUser.id,
+            email,
+            phone,
+            full_name: fullName
+        }, { onConflict: 'id' })
+        .select()
+        .single()
+
+    if (error) {
+        console.error('Failed to upsert user to Supabase:', error)
+        return null
+    }
+    return data
+}

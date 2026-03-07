@@ -20,7 +20,7 @@ const testimonials = [
 export default function LandingPage() {
     const { isSignedIn, user } = useUser()
     const { data: products } = useProducts()
-    const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress?.includes('admin'))
+    const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress === 'thejaswinp6@gmail.com')
     const [menuOpen, setMenuOpen] = useState(false)
 
     const featuredProducts = (products || []).slice(0, 4)

@@ -38,10 +38,10 @@ export default function App() {
         {/* Public */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
+        <Route path="/products" element={<ProductsPage />} />
 
         {/* Customer Routes */}
         <Route path="/dashboard" element={<ProtectedRoute><CustomerDashboard /></ProtectedRoute>} />
-        <Route path="/products" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
         <Route path="/order" element={<ProtectedRoute><OrderPage /></ProtectedRoute>} />
         <Route path="/subscriptions" element={<ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
         <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />

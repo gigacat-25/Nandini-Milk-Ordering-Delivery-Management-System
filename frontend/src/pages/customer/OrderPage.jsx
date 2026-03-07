@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar } from 'lucide-react'
 import { useCartStore } from '../../store'
 import { formatCurrency } from '../../lib/utils'
+import { createOrder } from '../../lib/useData'
+import { useUser } from '@clerk/clerk-react'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 
@@ -10,6 +12,7 @@ export default function OrderPage() {
     const { items, updateQty, removeItem, clearCart } = useCartStore()
     const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
     const navigate = useNavigate()
+    const { user } = useUser()
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
     const [address, setAddress] = useState('')
     const [deliveryDate, setDeliveryDate] = useState('')
@@ -17,13 +20,24 @@ export default function OrderPage() {
     const [orderId, setOrderId] = useState('')
 
     async function handlePayment() {
+        if (!user) return toast.error('You must be logged in to order')
         setPayLoading(true)
-        await new Promise((r) => setTimeout(r, 1800))
-        const id = 'ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase()
-        setOrderId(id)
-        clearCart()
-        setStep(4)
-        setPayLoading(false)
+        try {
+            // Simulated payment delay
+            await new Promise((r) => setTimeout(r, 1800))
+
+            // Actually create the order in Supabase
+            const order = await createOrder(user.id, items, total)
+
+            setOrderId(order.id.slice(0, 8).toUpperCase())
+            clearCart()
+            setStep(4)
+        } catch (error) {
+            console.error(error)
+            toast.error(error.message || 'Failed to place order')
+        } finally {
+            setPayLoading(false)
+        }
     }
 
     if (step === 4) {

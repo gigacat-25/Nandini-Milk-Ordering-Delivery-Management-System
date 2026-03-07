@@ -12,8 +12,7 @@ export default function Navbar() {
 
     const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0)
 
-    // Temporary admin check identical to ProtectedRoute
-    const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress?.includes('admin'))
+    const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress === 'thejaswinp6@gmail.com')
 
     const navLinks = isAdmin
         ? [
