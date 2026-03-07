@@ -1,47 +1,62 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, Package } from 'lucide-react'
-import { PRODUCTS } from '../../lib/mockData'
+import { useProducts } from '../../lib/useData'
+import { supabase } from '../../lib/supabase'
 import { formatCurrency } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 import Modal from '../../components/Modal'
 import toast from 'react-hot-toast'
 
 export default function AdminProducts() {
-    const [products, setProducts] = useState(PRODUCTS)
+    const { data: products, loading, refetch } = useProducts()
     const [editProduct, setEditProduct] = useState(null)
     const [showCreate, setShowCreate] = useState(false)
     const [form, setForm] = useState({ name: '', category: 'Milk', size_label: '', price: '', stock_qty: '', active: true })
 
-    function handleSave() {
+    async function handleSave() {
         if (!form.name || !form.price || !form.size_label) { toast.error('Fill in all required fields'); return }
-        if (editProduct) {
-            setProducts(products.map(p => p.id === editProduct.id ? { ...p, ...form, price: parseFloat(form.price), stock_qty: parseInt(form.stock_qty) } : p))
-            toast.success('Product updated')
-        } else {
-            const newP = { ...form, id: 'prod-' + Date.now(), price: parseFloat(form.price), stock_qty: parseInt(form.stock_qty), image: '🥛' }
-            setProducts([...products, newP])
-            toast.success('Product added')
+
+        try {
+            if (editProduct) {
+                const { error } = await supabase.from('products').update({ ...form, price: parseFloat(form.price), stock_qty: parseInt(form.stock_qty || 0) }).eq('id', editProduct.id)
+                if (error) throw error
+                toast.success('Product updated')
+            } else {
+                const { error } = await supabase.from('products').insert([{ ...form, price: parseFloat(form.price), stock_qty: parseInt(form.stock_qty || 0) }])
+                if (error) throw error
+                toast.success('Product added')
+            }
+            refetch()
+            setEditProduct(null); setShowCreate(false)
+            setForm({ name: '', category: 'Milk', size_label: '', price: '', stock_qty: '', active: true })
+        } catch (err) {
+            toast.error(err.message)
         }
-        setEditProduct(null); setShowCreate(false)
-        setForm({ name: '', category: 'Milk', size_label: '', price: '', stock_qty: '', active: true })
     }
 
     function openEdit(p) {
         setForm({ name: p.name, category: p.category, size_label: p.size_label, price: String(p.price), stock_qty: String(p.stock_qty), active: p.active })
         setEditProduct(p)
+        setShowCreate(true)
     }
 
-    function deleteProduct(id) {
+    async function deleteProduct(id) {
         if (!window.confirm('Delete this product?')) return
-        setProducts(products.filter(p => p.id !== id))
+        const { error } = await supabase.from('products').delete().eq('id', id)
+        if (error) { toast.error(error.message); return }
         toast.success('Product deleted')
+        refetch()
     }
 
-    function toggleActive(id) {
-        setProducts(products.map(p => p.id === id ? { ...p, active: !p.active } : p))
+    async function toggleActive(p) {
+        const { error } = await supabase.from('products').update({ active: !p.active }).eq('id', p.id)
+        if (error) { toast.error(error.message); return }
+        refetch()
     }
 
     const categoryEmoji = { Milk: '🥛', Curd: '🫙', Ghee: '🧈' }
+
+    if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading products...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -59,12 +74,12 @@ export default function AdminProducts() {
 
                 {/* Product Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
-                    {products.map(p => (
+                    {(products || []).map(p => (
                         <div key={p.id} className="card" style={{ opacity: p.active ? 1 : 0.6 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.875rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                     <div style={{ width: 44, height: 44, background: p.category === 'Milk' ? '#dbeafe' : p.category === 'Curd' ? '#fef9c3' : '#fef3c7', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                                        {categoryEmoji[p.category]}
+                                        {categoryEmoji[p.category] || '📦'}
                                     </div>
                                     <div>
                                         <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{p.name}</div>
@@ -79,12 +94,11 @@ export default function AdminProducts() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <span style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a' }}>{formatCurrency(p.price)}</span>
-                                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '0.25rem' }}>/{p.unit}</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Stock: {p.stock_qty}</span>
                                     <button
-                                        onClick={() => toggleActive(p.id)}
+                                        onClick={() => toggleActive(p)}
                                         style={{
                                             padding: '0.2rem 0.625rem', borderRadius: 20, border: 'none',
                                             background: p.active ? '#d1fae5' : '#f1f5f9',
@@ -102,7 +116,7 @@ export default function AdminProducts() {
             </div>
 
             {/* Add/Edit Modal */}
-            <Modal isOpen={showCreate || !!editProduct} onClose={() => { setShowCreate(false); setEditProduct(null) }} title={editProduct ? 'Edit Product' : 'Add New Product'}>
+            <Modal isOpen={showCreate} onClose={() => { setShowCreate(false); setEditProduct(null) }} title={editProduct ? 'Edit Product' : 'Add New Product'}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
                     <div>
                         <label className="label">Product Name *</label>

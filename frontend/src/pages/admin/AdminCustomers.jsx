@@ -1,19 +1,39 @@
 import { useState } from 'react'
 import { Search, Eye, Mail, Phone } from 'lucide-react'
-import { MOCK_CUSTOMERS } from '../../lib/mockData'
+import { useCustomers, useOrders, useSubscriptions } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 import Modal from '../../components/Modal'
 
 export default function AdminCustomers() {
+    const { data: customers, loading: customersLoading } = useCustomers()
+    const { data: orders, loading: ordersLoading } = useOrders()
+    const { data: subscriptions, loading: subsLoading } = useSubscriptions()
+
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState(null)
 
-    const filtered = MOCK_CUSTOMERS.filter(c =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.phone.includes(search) ||
-        c.email.toLowerCase().includes(search.toLowerCase())
+    // Compute stats on the fly
+    const computedCustomers = (customers || []).map(c => {
+        const cOrders = (orders || []).filter(o => o.customer_id === c.id)
+        const cSubs = (subscriptions || []).filter(s => s.customer_id === c.id)
+
+        return {
+            ...c,
+            total_orders: cOrders.length,
+            total_spent: cOrders.reduce((sum, o) => sum + o.total_amount, 0),
+            subscriptions: cSubs.length,
+            active_subscriptions: cSubs.filter(s => s.status === 'active').length
+        }
+    })
+
+    const filtered = computedCustomers.filter(c =>
+        c.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+        c.phone?.includes(search) ||
+        c.email?.toLowerCase().includes(search.toLowerCase())
     )
+
+    if (customersLoading || ordersLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading customers...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -27,10 +47,10 @@ export default function AdminCustomers() {
                 {/* Stats */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                     {[
-                        { label: 'Total Customers', value: MOCK_CUSTOMERS.length },
-                        { label: 'Active Subscriptions', value: MOCK_CUSTOMERS.reduce((s, c) => s + c.subscriptions, 0) },
-                        { label: 'Total Orders', value: MOCK_CUSTOMERS.reduce((s, c) => s + c.total_orders, 0) },
-                        { label: 'Total Revenue', value: formatCurrency(MOCK_CUSTOMERS.reduce((s, c) => s + c.total_spent, 0)) },
+                        { label: 'Total Customers', value: computedCustomers.length },
+                        { label: 'Active Subscriptions', value: computedCustomers.reduce((s, c) => s + c.active_subscriptions, 0) },
+                        { label: 'Total Orders', value: computedCustomers.reduce((s, c) => s + c.total_orders, 0) },
+                        { label: 'Total Revenue', value: formatCurrency(computedCustomers.reduce((s, c) => s + c.total_spent, 0)) },
                     ].map((s) => (
                         <div key={s.label} className="card" style={{ textAlign: 'center', padding: '1rem' }}>
                             <div style={{ fontSize: '1.375rem', fontWeight: 800, color: '#0f172a' }}>{s.value}</div>
@@ -53,7 +73,7 @@ export default function AdminCustomers() {
                                 <tr>
                                     <th>Customer</th>
                                     <th>Contact</th>
-                                    <th>Address</th>
+                                    <th>Clerk ID</th>
                                     <th>Subscriptions</th>
                                     <th>Total Orders</th>
                                     <th>Total Spent</th>
@@ -71,25 +91,24 @@ export default function AdminCustomers() {
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     color: '#2563eb', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0,
                                                 }}>
-                                                    {c.name[0]}
+                                                    {c.full_name?.[0] || 'U'}
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{c.name}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.id}</div>
+                                                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{c.full_name || 'Unknown'}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <div style={{ fontSize: '0.8125rem', color: '#374151' }}>{c.phone}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.email}</div>
+                                            <div style={{ fontSize: '0.8125rem', color: '#374151' }}>{c.phone || 'N/A'}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.email || 'N/A'}</div>
                                         </td>
-                                        <td style={{ fontSize: '0.8125rem', color: '#64748b', maxWidth: 160 }}>{c.address}</td>
+                                        <td style={{ fontSize: '0.8125rem', color: '#64748b', maxWidth: 160 }}>{c.id.substring(0, 10)}...</td>
                                         <td>
-                                            <span className={c.subscriptions > 0 ? 'badge-success' : 'badge-gray'}>{c.subscriptions} active</span>
+                                            <span className={c.active_subscriptions > 0 ? 'badge-success' : 'badge-gray'}>{c.active_subscriptions} active</span>
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{c.total_orders}</td>
                                         <td style={{ fontWeight: 700, color: '#2563eb' }}>{formatCurrency(c.total_spent)}</td>
-                                        <td style={{ color: '#64748b', fontSize: '0.8125rem' }}>{formatDate(c.joined)}</td>
+                                        <td style={{ color: '#64748b', fontSize: '0.8125rem' }}>{formatDate(c.created_at)}</td>
                                         <td>
                                             <button className="btn-secondary" style={{ padding: '0.375rem 0.625rem', fontSize: '0.8125rem' }} onClick={() => setSelected(c)}>
                                                 <Eye size={14} />
@@ -109,17 +128,17 @@ export default function AdminCustomers() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', fontWeight: 800, fontSize: '1.25rem' }}>
-                                {selected.name[0]}
+                                {selected.full_name?.[0] || 'U'}
                             </div>
                             <div>
-                                <div style={{ fontWeight: 700, fontSize: '1.125rem', color: '#0f172a' }}>{selected.name}</div>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Customer since {formatDate(selected.joined)}</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.125rem', color: '#0f172a' }}>{selected.full_name || 'Unknown User'}</div>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Customer since {formatDate(selected.created_at)}</div>
                             </div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                             {[
-                                { icon: Phone, label: 'Phone', value: selected.phone },
-                                { icon: Mail, label: 'Email', value: selected.email },
+                                { icon: Phone, label: 'Phone', value: selected.phone || 'N/A' },
+                                { icon: Mail, label: 'Email', value: selected.email || 'N/A' },
                             ].map(f => (
                                 <div key={f.label} style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: 8 }}>
                                     <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>{f.label}</div>
@@ -128,12 +147,12 @@ export default function AdminCustomers() {
                             ))}
                         </div>
                         <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: 8 }}>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Address</div>
-                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{selected.address}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Clerk ID</div>
+                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{selected.id}</div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
                             {[
-                                { label: 'Subscriptions', value: selected.subscriptions },
+                                { label: 'Subscriptions', value: selected.active_subscriptions },
                                 { label: 'Total Orders', value: selected.total_orders },
                                 { label: 'Total Spent', value: formatCurrency(selected.total_spent) },
                             ].map(s => (
@@ -144,12 +163,7 @@ export default function AdminCustomers() {
                             ))}
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                            <a href={`tel:${selected.phone}`} className="btn-secondary" style={{ textDecoration: 'none' }}>
-                                <Phone size={14} /> Call
-                            </a>
-                            <a href={`mailto:${selected.email}`} className="btn-primary" style={{ textDecoration: 'none' }}>
-                                <Mail size={14} /> Email
-                            </a>
+                            <button className="btn-secondary" onClick={() => setSelected(null)}>Close</button>
                         </div>
                     </div>
                 </Modal>

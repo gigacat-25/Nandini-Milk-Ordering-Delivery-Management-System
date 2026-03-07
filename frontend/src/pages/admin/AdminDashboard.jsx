@@ -1,23 +1,30 @@
 import { Link } from 'react-router-dom'
 import { Users, ShoppingBag, Truck, IndianRupee, RefreshCw, TrendingUp, Package, AlertTriangle, ChevronRight } from 'lucide-react'
-import { MOCK_ORDERS, MOCK_CUSTOMERS, MOCK_SUBSCRIPTIONS, PRODUCTS } from '../../lib/mockData'
-import { formatCurrency, formatDate } from '../../lib/utils'
+import { useOrders, useCustomers, useSubscriptions } from '../../lib/useData'
+import { formatCurrency } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 import StatsCard from '../../components/StatsCard'
 
 export default function AdminDashboard() {
-    const activeSubscriptions = MOCK_CUSTOMERS.reduce((sum, c) => sum + c.subscriptions, 0)
-    const tomorrowMilkReq = {
-        'Toned Milk 1L': 68,
-        'Toned Milk 500ml': 42,
-        'Full Cream 500ml': 22,
-        'Curd 500g': 18,
-        'Curd 1kg': 8,
-        'Ghee 200ml': 5,
-    }
+    const { data: orders } = useOrders()
+    const { data: customers } = useCustomers()
+    const { data: subscriptions } = useSubscriptions()
+
+    const activeSubs = (subscriptions || []).filter(s => s.status === 'active')
+    const activeSubCount = activeSubs.length
+
+    // Calculate tomorrow's generic requirement based on active subscriptions
+    const tomorrowMilkReq = {}
+    activeSubs.forEach(sub => {
+        const item = sub.products?.name + ' ' + sub.products?.size_label
+        tomorrowMilkReq[item] = (tomorrowMilkReq[item] || 0) + sub.quantity
+    })
+
     const totalPackets = Object.values(tomorrowMilkReq).reduce((s, v) => s + v, 0)
-    const todayRevenue = MOCK_ORDERS.reduce((s, o) => s + o.total_amount, 0)
-    const pendingOrders = MOCK_ORDERS.filter(o => o.status === 'pending').length
+
+    // Revenue from confirmed/delivered orders today
+    const todayRevenue = (orders || []).reduce((s, o) => s + o.total_amount, 0)
+    const pendingOrders = (orders || []).filter(o => o.status === 'confirmed').length
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -32,9 +39,9 @@ export default function AdminDashboard() {
                 {/* Stat Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                     <StatsCard icon={Package} label="Tomorrow's Packets" value={totalPackets} sub="Total required" color="#2563eb" bg="#dbeafe" />
-                    <StatsCard icon={Users} label="Active Customers" value={MOCK_CUSTOMERS.length} sub={`${activeSubscriptions} subscriptions`} color="#059669" bg="#d1fae5" />
-                    <StatsCard icon={IndianRupee} label="Today's Revenue" value={formatCurrency(todayRevenue)} sub="From all orders" color="#7c3aed" bg="#ede9fe" />
-                    <StatsCard icon={AlertTriangle} label="Pending Orders" value={pendingOrders} sub="Need confirmation" color="#dc2626" bg="#fee2e2" />
+                    <StatsCard icon={Users} label="Registered Users" value={(customers || []).length} sub={`${activeSubCount} active subscriptions`} color="#059669" bg="#d1fae5" />
+                    <StatsCard icon={IndianRupee} label="Total Order Revenue" value={formatCurrency(todayRevenue)} sub="Historical" color="#7c3aed" bg="#ede9fe" />
+                    <StatsCard icon={AlertTriangle} label="Actionable Orders" value={pendingOrders} sub="Need delivery" color="#dc2626" bg="#fee2e2" />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -47,17 +54,21 @@ export default function AdminDashboard() {
                             </Link>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-                            {Object.entries(tomorrowMilkReq).map(([item, qty]) => (
-                                <div key={item} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0.875rem', background: '#f8fafc', borderRadius: 8 }}>
-                                    <span style={{ fontSize: '0.875rem', color: '#374151', fontWeight: 500 }}>{item}</span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ width: 80, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                                            <div style={{ width: `${(qty / totalPackets) * 100}%`, height: '100%', background: '#2563eb', borderRadius: 3 }} />
+                            {Object.entries(tomorrowMilkReq).length === 0 ? (
+                                <div style={{ textAlign: 'center', color: '#94a3b8', padding: '1rem' }}>No active subscriptions found.</div>
+                            ) : (
+                                Object.entries(tomorrowMilkReq).map(([item, qty]) => (
+                                    <div key={item} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0.875rem', background: '#f8fafc', borderRadius: 8 }}>
+                                        <span style={{ fontSize: '0.875rem', color: '#374151', fontWeight: 500 }}>{item}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ width: 80, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                                                <div style={{ width: `${(qty / totalPackets) * 100}%`, height: '100%', background: '#2563eb', borderRadius: 3 }} />
+                                            </div>
+                                            <span style={{ fontWeight: 700, color: '#2563eb', minWidth: 28, textAlign: 'right' }}>{qty}</span>
                                         </div>
-                                        <span style={{ fontWeight: 700, color: '#2563eb', minWidth: 28, textAlign: 'right' }}>{qty}</span>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                             <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontWeight: 700, color: '#0f172a' }}>Total Packets</span>
                                 <span style={{ fontWeight: 800, fontSize: '1.25rem', color: '#2563eb' }}>{totalPackets}</span>
@@ -74,11 +85,11 @@ export default function AdminDashboard() {
                             </Link>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-                            {MOCK_ORDERS.slice(0, 5).map((o) => (
+                            {(orders || []).slice(0, 5).map((o) => (
                                 <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0.875rem', background: '#f8fafc', borderRadius: 8 }}>
                                     <div>
-                                        <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#0f172a' }}>{o.customer_name}</div>
-                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{o.id}</div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#0f172a' }}>{o.id.split('-')[0]}</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Order created today</div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{formatCurrency(o.total_amount)}</div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Search, Filter } from 'lucide-react'
-import { MOCK_ORDERS } from '../../lib/mockData'
+import { useOrders } from '../../lib/useData'
+import { supabase } from '../../lib/supabase'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
@@ -8,22 +9,30 @@ import toast from 'react-hot-toast'
 const STATUS_OPTIONS = ['All', 'pending', 'confirmed', 'delivered', 'cancelled']
 
 export default function AdminOrders() {
-    const [orders, setOrders] = useState(MOCK_ORDERS)
+    const { data: orders, loading, refetch } = useOrders()
     const [filter, setFilter] = useState('All')
     const [search, setSearch] = useState('')
 
-    const filtered = orders.filter((o) => {
+    const filtered = (orders || []).filter((o) => {
         const matchStatus = filter === 'All' || o.status === filter
-        const matchSearch = o.customer_name.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase())
+        const matchSearch = o.id.toLowerCase().includes(search.toLowerCase())
         return matchStatus && matchSearch
     })
 
-    function updateStatus(id, status) {
-        setOrders(orders.map(o => o.id === id ? { ...o, status } : o))
-        toast.success(`Order ${id} marked as ${status}`)
+    async function updateStatus(id, status) {
+        try {
+            const { error } = await supabase.from('orders').update({ status }).eq('id', id)
+            if (error) throw error
+            toast.success(`Order marked as ${status}`)
+            refetch()
+        } catch (err) {
+            toast.error(err.message)
+        }
     }
 
     const statusBadge = (s) => s === 'delivered' ? 'badge-success' : s === 'confirmed' ? 'badge-blue' : s === 'cancelled' ? 'badge-danger' : 'badge-warning'
+
+    if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading orders...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -37,10 +46,10 @@ export default function AdminOrders() {
                 {/* Summary Row */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                     {[
-                        { label: 'Total', value: orders.length, color: '#2563eb' },
-                        { label: 'Pending', value: orders.filter(o => o.status === 'pending').length, color: '#f59e0b' },
-                        { label: 'Confirmed', value: orders.filter(o => o.status === 'confirmed').length, color: '#2563eb' },
-                        { label: 'Delivered', value: orders.filter(o => o.status === 'delivered').length, color: '#059669' },
+                        { label: 'Total', value: (orders || []).length, color: '#2563eb' },
+                        { label: 'Pending', value: (orders || []).filter(o => o.status === 'pending').length, color: '#f59e0b' },
+                        { label: 'Confirmed', value: (orders || []).filter(o => o.status === 'confirmed').length, color: '#2563eb' },
+                        { label: 'Delivered', value: (orders || []).filter(o => o.status === 'delivered').length, color: '#059669' },
                     ].map((s) => (
                         <div key={s.label} className="card" style={{ textAlign: 'center', padding: '1rem' }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -53,7 +62,7 @@ export default function AdminOrders() {
                 <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: '1 1 260px' }}>
                         <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                        <input className="input" placeholder="Search by customer or order ID..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: '2.25rem' }} />
+                        <input className="input" placeholder="Search by order ID..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: '2.25rem' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {STATUS_OPTIONS.map(s => (
@@ -76,8 +85,8 @@ export default function AdminOrders() {
                             <thead>
                                 <tr>
                                     <th>Order ID</th>
-                                    <th>Customer</th>
-                                    <th>Products</th>
+                                    <th>Customer ID</th>
+                                    <th>Items</th>
                                     <th>Delivery Date</th>
                                     <th>Amount</th>
                                     <th>Status</th>
@@ -89,9 +98,9 @@ export default function AdminOrders() {
                                     <tr><td colSpan={7} style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>No orders found</td></tr>
                                 ) : filtered.map((o) => (
                                     <tr key={o.id}>
-                                        <td style={{ fontWeight: 700, color: '#2563eb' }}>{o.id}</td>
-                                        <td style={{ fontWeight: 600 }}>{o.customer_name}</td>
-                                        <td style={{ color: '#64748b', maxWidth: 200, fontSize: '0.8125rem' }}>{o.products}</td>
+                                        <td style={{ fontWeight: 700, color: '#2563eb' }}>{o.id.split('-')[0]}</td>
+                                        <td style={{ fontWeight: 600 }}>{o.customer_id.substring(0, 8)}...</td>
+                                        <td style={{ color: '#64748b', maxWidth: 200, fontSize: '0.8125rem' }}>{o.items?.length || 0} items</td>
                                         <td style={{ color: '#64748b' }}>{formatDate(o.delivery_date)}</td>
                                         <td style={{ fontWeight: 700 }}>{formatCurrency(o.total_amount)}</td>
                                         <td><span className={statusBadge(o.status)} style={{ textTransform: 'capitalize' }}>{o.status}</span></td>

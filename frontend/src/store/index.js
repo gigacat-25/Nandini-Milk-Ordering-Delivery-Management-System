@@ -1,18 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-
-// Auth store
-export const useAuthStore = create(
-    persist(
-        (set) => ({
-            user: null,
-            isAdmin: false,
-            setUser: (user) => set({ user, isAdmin: user?.role === 'admin' }),
-            logout: () => set({ user: null, isAdmin: false }),
-        }),
-        { name: 'nandini-auth' }
-    )
-)
 
 // Cart store
 export const useCartStore = create((set, get) => ({

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
-import { PRODUCTS as MOCK_PRODUCTS } from '../../lib/mockData'
+import { useProducts } from '../../lib/useData'
 import ProductCard from '../../components/ProductCard'
 import Navbar from '../../components/Navbar'
 import { useCartStore } from '../../store'
@@ -17,10 +17,12 @@ export default function ProductsPage() {
     const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0)
     const navigate = useNavigate()
 
-    // Use mock data
-    const allProducts = MOCK_PRODUCTS
+    const { data: allProducts, loading, error } = useProducts()
 
-    const filtered = allProducts.filter((p) => {
+    if (loading) return <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'grid', placeItems: 'center', color: '#64748b' }}>Loading products...</div>
+    if (error) return <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'grid', placeItems: 'center', color: '#ef4444' }}>Error: {error.message}</div>
+
+    const filtered = (allProducts || []).filter((p) => {
         const matchCat = activeCategory === 'All' || p.category === activeCategory
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.size_label.toLowerCase().includes(search.toLowerCase())
         return matchCat && matchSearch

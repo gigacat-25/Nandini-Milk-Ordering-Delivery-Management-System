@@ -1,18 +1,21 @@
 import { Link } from 'react-router-dom'
 import { ShoppingBag, RefreshCw, Truck, IndianRupee, ChevronRight, Package } from 'lucide-react'
-import { useAuthStore } from '../../store'
-import { MOCK_SUBSCRIPTIONS, MOCK_ORDERS } from '../../lib/mockData'
+import { useUser } from '@clerk/clerk-react'
+import { useOrders, useSubscriptions } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 
 export default function CustomerDashboard() {
-    const { user } = useAuthStore()
-    const todayDeliveries = MOCK_SUBSCRIPTIONS.filter(s => s.status === 'active')
-    const recentOrders = MOCK_ORDERS.slice(0, 3)
+    const { user, isLoaded } = useUser()
+    const { data: ordersData, loading: ordersLoading } = useOrders(user?.id)
+    const { data: subsData, loading: subsLoading } = useSubscriptions(user?.id)
 
-    const monthlyTotal = MOCK_SUBSCRIPTIONS
-        .filter(s => s.status === 'active')
-        .reduce((sum, s) => sum + s.price_per_unit * s.quantity * 30, 0)
+    const todayDeliveries = (subsData || []).filter(s => s.status === 'active')
+    const recentOrders = (ordersData || []).slice(0, 3)
+
+    const monthlyTotal = todayDeliveries.reduce((sum, s) => sum + (s.products?.price || 0) * s.quantity * 30, 0)
+
+    if (!isLoaded || ordersLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading dashboard...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -21,7 +24,7 @@ export default function CustomerDashboard() {
                 {/* Welcome */}
                 <div style={{ marginBottom: '2rem' }}>
                     <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.25rem' }}>
-                        Good morning, {user?.name?.split(' ')[0] || 'there'}! 👋
+                        Good morning, {user?.firstName || 'there'}! 👋
                     </h1>
                     <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem' }}>
                         Here's your delivery summary for today.
@@ -34,7 +37,7 @@ export default function CustomerDashboard() {
                         { icon: Truck, label: "Today's Deliveries", value: todayDeliveries.length, color: '#2563eb', bg: '#dbeafe' },
                         { icon: RefreshCw, label: 'Active Subscriptions', value: todayDeliveries.length, color: '#059669', bg: '#d1fae5' },
                         { icon: IndianRupee, label: 'Est. Monthly Bill', value: formatCurrency(monthlyTotal), color: '#7c3aed', bg: '#ede9fe' },
-                        { icon: ShoppingBag, label: 'Total Orders', value: MOCK_ORDERS.length, color: '#dc2626', bg: '#fee2e2' },
+                        { icon: ShoppingBag, label: 'Total Orders', value: ordersData?.length || 0, color: '#dc2626', bg: '#fee2e2' },
                     ].map((s) => (
                         <div key={s.label} className="stat-card">
                             <div style={{ width: 40, height: 40, background: s.bg, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, marginBottom: '0.75rem' }}>
@@ -68,11 +71,11 @@ export default function CustomerDashboard() {
                                 {todayDeliveries.map((s) => (
                                     <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: 8, alignItems: 'center' }}>
                                         <div>
-                                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a' }}>{s.product_name}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.size} × {s.quantity}</div>
+                                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a' }}>{s.products?.name || 'Unknown Product'}</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.products?.size_label || 'Standard'} × {s.quantity}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontWeight: 700, color: '#2563eb', fontSize: '0.9rem' }}>{formatCurrency(s.price_per_unit * s.quantity)}</div>
+                                            <div style={{ fontWeight: 700, color: '#2563eb', fontSize: '0.9rem' }}>{formatCurrency((s.products?.price || 0) * s.quantity)}</div>
                                             <span className="badge-success" style={{ fontSize: '0.7rem' }}>Active</span>
                                         </div>
                                     </div>

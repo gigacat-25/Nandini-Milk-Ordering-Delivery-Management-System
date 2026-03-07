@@ -1,57 +1,64 @@
 import { useState } from 'react'
 import { Plus, Pause, Play, Trash2, RefreshCw, Calendar } from 'lucide-react'
-import { MOCK_SUBSCRIPTIONS, PRODUCTS } from '../../lib/mockData'
+import { useSubscriptions, useProducts, createSubscription } from '../../lib/useData'
+import { supabase } from '../../lib/supabase'
+import { useUser } from '@clerk/clerk-react'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 import Modal from '../../components/Modal'
 import toast from 'react-hot-toast'
 
 export default function SubscriptionsPage() {
-    const [subs, setSubs] = useState(MOCK_SUBSCRIPTIONS)
+    const { user } = useUser()
+    const { data: subs, loading, refetch } = useSubscriptions(user?.id)
+    const { data: products } = useProducts()
+
     const [showCreate, setShowCreate] = useState(false)
     const [showPause, setShowPause] = useState(null)
     const [pauseDate, setPauseDate] = useState('')
     const [newSub, setNewSub] = useState({ product_id: '', quantity: 1, start_date: '' })
 
-    function togglePause(id) {
-        setSubs(subs.map(s => s.id === id ? { ...s, status: s.status === 'active' ? 'paused' : 'active', next_delivery: s.status === 'paused' ? 'Tomorrow' : 'Paused' } : s))
-        toast.success(subs.find(s => s.id === id)?.status === 'active' ? 'Subscription paused' : 'Subscription resumed')
+    async function togglePause(sub) {
+        const newStatus = sub.status === 'active' ? 'paused' : 'active'
+        const { error } = await supabase.from('subscriptions').update({ status: newStatus }).eq('id', sub.id)
+        if (error) { toast.error('Failed to update subscription'); return }
+
+        toast.success(newStatus === 'active' ? 'Subscription resumed' : 'Subscription paused')
+        refetch()
     }
 
-    function deleteSub(id) {
-        setSubs(subs.filter(s => s.id !== id))
+    async function deleteSub(id) {
+        const { error } = await supabase.from('subscriptions').delete().eq('id', id)
+        if (error) { toast.error('Failed to cancel'); return }
         toast.success('Subscription cancelled')
+        refetch()
     }
 
-    function addPause() {
+    async function addPause() {
         if (!pauseDate) { toast.error('Select a date to pause'); return }
-        toast.success(`Delivery paused for ${formatDate(pauseDate)}`)
+        // For simplicity, we just show a toast. In a real app, this would insert into a subscription_pauses table.
+        toast.success(`Delivery paused for ${formatDate(pauseDate)} (Demo)`)
         setShowPause(null)
         setPauseDate('')
     }
 
-    function createSubscription() {
+    async function handleCreate() {
         if (!newSub.product_id || !newSub.start_date) { toast.error('Fill all fields'); return }
-        const product = PRODUCTS.find(p => p.id === newSub.product_id)
-        const sub = {
-            id: 'SUB-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
-            product_name: product.name,
-            size: product.size_label,
-            quantity: newSub.quantity,
-            price_per_unit: product.price,
-            frequency: 'Daily',
-            start_date: newSub.start_date,
-            status: 'active',
-            next_delivery: formatDate(newSub.start_date),
+        try {
+            await createSubscription(user.id, newSub.product_id, newSub.quantity)
+            toast.success('Subscription created!')
+            setShowCreate(false)
+            setNewSub({ product_id: '', quantity: 1, start_date: '' })
+            refetch()
+        } catch (err) {
+            toast.error(err.message)
         }
-        setSubs([...subs, sub])
-        toast.success('Subscription created!')
-        setShowCreate(false)
-        setNewSub({ product_id: '', quantity: 1, start_date: '' })
     }
 
-    const activeSubs = subs.filter(s => s.status === 'active')
-    const monthlyEst = activeSubs.reduce((sum, s) => sum + s.price_per_unit * s.quantity * 30, 0)
+    if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading subscriptions...</div>
+
+    const activeSubs = (subs || []).filter(s => s.status === 'active')
+    const monthlyEst = activeSubs.reduce((sum, s) => sum + (s.products?.price || 0) * s.quantity * 30, 0)
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -71,7 +78,7 @@ export default function SubscriptionsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                     {[
                         { label: 'Active Subscriptions', value: activeSubs.length, color: '#059669', bg: '#d1fae5' },
-                        { label: 'Paused', value: subs.filter(s => s.status === 'paused').length, color: '#f59e0b', bg: '#fef3c7' },
+                        { label: 'Paused', value: (subs || []).filter(s => s.status === 'paused').length, color: '#f59e0b', bg: '#fef3c7' },
                         { label: 'Est. Monthly Cost', value: formatCurrency(monthlyEst), color: '#2563eb', bg: '#dbeafe' },
                     ].map((s) => (
                         <div key={s.label} className="stat-card">
@@ -82,7 +89,7 @@ export default function SubscriptionsPage() {
                 </div>
 
                 {/* Subscriptions List */}
-                {subs.length === 0 ? (
+                {(subs || []).length === 0 ? (
                     <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
                         <RefreshCw size={40} color="#94a3b8" style={{ marginBottom: '0.75rem' }} />
                         <div style={{ fontWeight: 700, color: '#374151', marginBottom: '0.5rem' }}>No subscriptions yet</div>
@@ -97,19 +104,19 @@ export default function SubscriptionsPage() {
                                     🥛
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1rem' }}>{s.product_name}</div>
-                                    <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{s.size} · {s.quantity} {s.quantity > 1 ? 'packets' : 'packet'} · {s.frequency}</div>
+                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1rem' }}>{s.products?.name}</div>
+                                    <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{s.products?.size_label} · {s.quantity} {s.quantity > 1 ? 'packets' : 'packet'} · {s.frequency}</div>
                                     <div style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.2rem' }}>
-                                        Next delivery: <strong>{s.next_delivery}</strong>
+                                        Created: <strong>{formatDate(s.created_at)}</strong>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.0625rem' }}>{formatCurrency(s.price_per_unit * s.quantity)}<span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>/day</span></div>
+                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.0625rem' }}>{formatCurrency((s.products?.price || 0) * s.quantity)}<span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>/day</span></div>
                                     <span className={s.status === 'active' ? 'badge-success' : 'badge-warning'}>{s.status}</span>
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     <button
-                                        onClick={() => togglePause(s.id)}
+                                        onClick={() => togglePause(s)}
                                         style={{
                                             padding: '0.5rem 0.875rem', borderRadius: 8, border: '1px solid',
                                             borderColor: s.status === 'active' ? '#f59e0b' : '#059669',
@@ -149,7 +156,7 @@ export default function SubscriptionsPage() {
                         <label className="label">Select Product</label>
                         <select className="input" value={newSub.product_id} onChange={e => setNewSub({ ...newSub, product_id: e.target.value })}>
                             <option value="">Choose a product...</option>
-                            {PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name} — {p.size_label} ({formatCurrency(p.price)})</option>)}
+                            {(products || []).map(p => <option key={p.id} value={p.id}>{p.name} — {p.size_label} ({formatCurrency(p.price)})</option>)}
                         </select>
                     </div>
                     <div>
@@ -160,14 +167,14 @@ export default function SubscriptionsPage() {
                         <label className="label">Start Date</label>
                         <input className="input" type="date" value={newSub.start_date} onChange={e => setNewSub({ ...newSub, start_date: e.target.value })} min={new Date().toISOString().split('T')[0]} />
                     </div>
-                    {newSub.product_id && (
+                    {newSub.product_id && products && (
                         <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '0.75rem', fontSize: '0.875rem', color: '#166534' }}>
-                            💰 Estimated monthly cost: <strong>{formatCurrency((PRODUCTS.find(p => p.id === newSub.product_id)?.price || 0) * newSub.quantity * 30)}</strong>
+                            💰 Estimated monthly cost: <strong>{formatCurrency((products.find(p => p.id === newSub.product_id)?.price || 0) * newSub.quantity * 30)}</strong>
                         </div>
                     )}
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
                         <button className="btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-                        <button className="btn-primary" onClick={createSubscription}>Create Subscription</button>
+                        <button className="btn-primary" onClick={handleCreate}>Create Subscription</button>
                     </div>
                 </div>
             </Modal>

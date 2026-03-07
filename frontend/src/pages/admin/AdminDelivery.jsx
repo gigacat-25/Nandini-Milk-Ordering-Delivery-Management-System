@@ -1,16 +1,46 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Download, CheckCircle, Clock, MapPin, Phone } from 'lucide-react'
-import { MOCK_DELIVERY_LIST } from '../../lib/mockData'
+import { useSubscriptions, useCustomers } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
 
 export default function AdminDelivery() {
-    const [deliveries, setDeliveries] = useState(MOCK_DELIVERY_LIST)
-    const [date, setDate] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0])
+    const { data: subscriptions, loading: subsLoading } = useSubscriptions()
+    const { data: customers, loading: custLoading } = useCustomers()
+    const [date, setDate] = useState(newtoISOStringDate())
+    const [deliveredIds, setDeliveredIds] = useState(new Set()) // Local state for demo purposes
+
+    function newtoISOStringDate() {
+        return new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    }
+
+    // Generate daily delivery sheet on the fly from active subscriptions
+    const deliveries = useMemo(() => {
+        if (!subscriptions || !customers) return []
+
+        const activeSubs = subscriptions.filter(s => s.status === 'active')
+
+        return activeSubs.map(sub => {
+            const customer = customers.find(c => c.id === sub.customer_id)
+            return {
+                id: sub.id, // Using sub ID as delivery ID for demo
+                customer: customer?.full_name || 'Unknown',
+                address: customer?.address || 'Address not provided',
+                phone: customer?.phone || 'N/A',
+                items: `${sub.quantity}x ${sub.products?.name} (${sub.products?.size_label})`,
+                amount: (sub.products?.price || 0) * sub.quantity,
+                status: deliveredIds.has(sub.id) ? 'delivered' : 'pending'
+            }
+        })
+    }, [subscriptions, customers, deliveredIds])
 
     function markDelivered(id) {
-        setDeliveries(d => d.map(i => i.id === id ? { ...i, status: 'delivered' } : i))
+        setDeliveredIds(prev => {
+            const next = new Set(prev)
+            next.add(id)
+            return next
+        })
         toast.success('Marked as delivered')
     }
 
@@ -19,7 +49,7 @@ export default function AdminDelivery() {
             ['#', 'Customer', 'Address', 'Phone', 'Items', 'Amount', 'Status'],
             ...deliveries.map((d, i) => [i + 1, d.customer, d.address, d.phone, d.items, d.amount, d.status])
         ]
-        const csv = rows.map(r => r.join(',')).join('\n')
+        const csv = rows.map(r => `"${r.join('","')}"`).join('\n')
         const blob = new Blob([csv], { type: 'text/csv' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -31,6 +61,8 @@ export default function AdminDelivery() {
     const delivered = deliveries.filter(d => d.status === 'delivered').length
     const totalAmt = deliveries.reduce((s, d) => s + d.amount, 0)
 
+    if (subsLoading || custLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading deliveries...</div>
+
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
             <Navbar />
@@ -39,7 +71,7 @@ export default function AdminDelivery() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
                         <h1 className="page-title">Daily Delivery Report</h1>
-                        <p className="page-subtitle">Delivery schedule and route for your delivery staff.</p>
+                        <p className="page-subtitle">Delivery schedule and route generated from active subscriptions.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto' }} />
@@ -64,7 +96,11 @@ export default function AdminDelivery() {
 
                 {/* Delivery Cards */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-                    {deliveries.map((d, idx) => (
+                    {deliveries.length === 0 ? (
+                        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                            No deliveries scheduled for this date. (Only active subscriptions are considered).
+                        </div>
+                    ) : deliveries.map((d, idx) => (
                         <div key={d.id} className="card fade-in" style={{
                             display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
                             opacity: d.status === 'delivered' ? 0.7 : 1,
@@ -114,14 +150,16 @@ export default function AdminDelivery() {
                 </div>
 
                 {/* Summary */}
-                <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, padding: '1rem 1.5rem', marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontWeight: 600 }}>
-                        <CheckCircle size={18} /> {delivered} of {deliveries.length} deliveries completed
+                {deliveries.length > 0 && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, padding: '1rem 1.5rem', marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontWeight: 600 }}>
+                            <CheckCircle size={18} /> {delivered} of {deliveries.length} deliveries completed
+                        </div>
+                        <div style={{ fontWeight: 700, color: '#166534' }}>
+                            Collection: {formatCurrency(deliveries.filter(d => d.status === 'delivered').reduce((s, d) => s + d.amount, 0))} / {formatCurrency(totalAmt)}
+                        </div>
                     </div>
-                    <div style={{ fontWeight: 700, color: '#166534' }}>
-                        Collection: {formatCurrency(deliveries.filter(d => d.status === 'delivered').reduce((s, d) => s + d.amount, 0))} / {formatCurrency(totalAmt)}
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     )

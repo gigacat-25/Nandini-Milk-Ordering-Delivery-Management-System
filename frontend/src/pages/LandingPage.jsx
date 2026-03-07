@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Milk, CheckCircle, Clock, Truck, Star, ChevronRight, Menu } from 'lucide-react'
 import { useState } from 'react'
-import { useAuthStore } from '../store'
-import { PRODUCTS } from '../lib/mockData'
+import { useUser } from '@clerk/clerk-react'
+import { useProducts } from '../lib/useData'
 import { formatCurrency } from '../lib/utils'
 
 const features = [
@@ -18,10 +18,12 @@ const testimonials = [
 ]
 
 export default function LandingPage() {
-    const { user, isAdmin } = useAuthStore()
+    const { isSignedIn, user } = useUser()
+    const { data: products } = useProducts()
+    const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress?.includes('admin'))
     const [menuOpen, setMenuOpen] = useState(false)
 
-    const featuredProducts = PRODUCTS.slice(0, 4)
+    const featuredProducts = (products || []).slice(0, 4)
 
     return (
         <div style={{ minHeight: '100vh', background: 'white' }}>
@@ -44,7 +46,7 @@ export default function LandingPage() {
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    {user ? (
+                    {isSignedIn ? (
                         <Link
                             to={isAdmin ? '/admin' : '/dashboard'}
                             className="btn-primary"
