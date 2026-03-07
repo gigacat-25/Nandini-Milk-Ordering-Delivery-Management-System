@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Download, CheckCircle, Clock, MapPin, Phone } from 'lucide-react'
-import { useSubscriptions, useCustomers } from '../../lib/useData'
+import { useSubscriptions, useCustomers, useSubscriptionPauses } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
@@ -9,6 +9,7 @@ export default function AdminDelivery() {
     const { data: subscriptions, loading: subsLoading } = useSubscriptions()
     const { data: customers, loading: custLoading } = useCustomers()
     const [date, setDate] = useState(newtoISOStringDate())
+    const { data: pauses, loading: pausesLoading } = useSubscriptionPauses(date)
     const [deliveredIds, setDeliveredIds] = useState(new Set()) // Local state for demo purposes
 
     function newtoISOStringDate() {
@@ -19,7 +20,12 @@ export default function AdminDelivery() {
     const deliveries = useMemo(() => {
         if (!subscriptions || !customers) return []
 
-        const activeSubs = subscriptions.filter(s => s.status === 'active')
+        const activeSubs = subscriptions.filter(s => {
+            if (s.status !== 'active') return false
+            // Check if this sub is paused for the current date
+            const isPaused = pauses?.some(p => p.subscription_id === s.id && p.pause_date === date)
+            return !isPaused
+        })
 
         return activeSubs.map(sub => {
             const customer = customers.find(c => c.id === sub.customer_id)
@@ -28,12 +34,12 @@ export default function AdminDelivery() {
                 customer: customer?.full_name || 'Unknown',
                 address: customer?.address || 'Address not provided',
                 phone: customer?.phone || 'N/A',
-                items: `${sub.quantity}x ${sub.products?.name} (${sub.products?.size_label})`,
+                items: `${sub.quantity}x ${sub.products?.name} (${sub.products?.size_label}) [${sub.delivery_slot}]`,
                 amount: (sub.products?.price || 0) * sub.quantity,
                 status: deliveredIds.has(sub.id) ? 'delivered' : 'pending'
             }
         })
-    }, [subscriptions, customers, deliveredIds])
+    }, [subscriptions, customers, deliveredIds, pauses, date])
 
     function markDelivered(id) {
         setDeliveredIds(prev => {
@@ -61,7 +67,7 @@ export default function AdminDelivery() {
     const delivered = deliveries.filter(d => d.status === 'delivered').length
     const totalAmt = deliveries.reduce((s, d) => s + d.amount, 0)
 
-    if (subsLoading || custLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading deliveries...</div>
+    if (subsLoading || custLoading || pausesLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading deliveries...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>

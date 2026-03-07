@@ -27,6 +27,7 @@ export default function Navbar() {
             { to: '/products', label: 'Products' },
             { to: '/subscriptions', label: 'Subscriptions' },
             { to: '/billing', label: 'Billing' },
+            { to: '/profile', label: 'Settings' },
         ]
 
     return (

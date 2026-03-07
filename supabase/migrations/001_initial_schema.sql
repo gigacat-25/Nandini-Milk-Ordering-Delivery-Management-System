@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   email TEXT,
   full_name TEXT,
   address TEXT,
+  delivery_instructions TEXT,
+  google_maps_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -43,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'delivered', 'cancelled')),
   total_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
   delivery_date DATE,
+  delivery_slot TEXT NOT NULL DEFAULT 'morning' CHECK (delivery_slot IN ('morning', 'evening')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -64,8 +67,18 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   quantity INT NOT NULL CHECK (quantity > 0),
   frequency TEXT NOT NULL DEFAULT 'daily',
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'cancelled')),
+  delivery_slot TEXT NOT NULL DEFAULT 'morning' CHECK (delivery_slot IN ('morning', 'evening')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5a. Subscription Pauses table (to store skipped dates)
+CREATE TABLE IF NOT EXISTS public.subscription_pauses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  subscription_id UUID NOT NULL REFERENCES public.subscriptions(id) ON DELETE CASCADE,
+  pause_date DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(subscription_id, pause_date)
 );
 
 -- 6. Deliveries table (Optional, for tracking historical completed daily drops)
@@ -86,6 +99,7 @@ ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscription_pauses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deliveries DISABLE ROW LEVEL SECURITY;
 
 -- Grant access to Supabase API roles (anon and authenticated)

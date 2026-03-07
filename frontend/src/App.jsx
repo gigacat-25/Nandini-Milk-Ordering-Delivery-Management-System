@@ -11,6 +11,7 @@ import ProductsPage from './pages/customer/ProductsPage'
 import OrderPage from './pages/customer/OrderPage'
 import SubscriptionsPage from './pages/customer/SubscriptionsPage'
 import BillingPage from './pages/customer/BillingPage'
+import ProfilePage from './pages/customer/ProfilePage'
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/order" element={<ProtectedRoute><OrderPage /></ProtectedRoute>} />
         <Route path="/subscriptions" element={<ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
         <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />

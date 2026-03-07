@@ -16,6 +16,7 @@ export default function OrderPage() {
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
     const [address, setAddress] = useState('')
     const [deliveryDate, setDeliveryDate] = useState('')
+    const [deliverySlot, setDeliverySlot] = useState('morning')
     const [payLoading, setPayLoading] = useState(false)
     const [orderId, setOrderId] = useState('')
 
@@ -27,7 +28,7 @@ export default function OrderPage() {
             await new Promise((r) => setTimeout(r, 1800))
 
             // Actually create the order in Supabase
-            const order = await createOrder(user.id, items, total)
+            const order = await createOrder(user.id, items, total, deliverySlot)
 
             setOrderId(order.id.slice(0, 8).toUpperCase())
             clearCart()
@@ -155,6 +156,13 @@ export default function OrderPage() {
                                             onChange={(e) => setDeliveryDate(e.target.value)}
                                             min={new Date().toISOString().split('T')[0]}
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="label">Delivery Slot</label>
+                                        <select className="input" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
+                                            <option value="morning">Morning (Before 7 AM)</option>
+                                            <option value="evening">Evening (After 5 PM)</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>

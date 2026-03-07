@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Pause, Play, Trash2, RefreshCw, Calendar } from 'lucide-react'
-import { useSubscriptions, useProducts, createSubscription } from '../../lib/useData'
+import { useSubscriptions, useProducts, createSubscription, pauseSubscriptionDate } from '../../lib/useData'
 import { supabase } from '../../lib/supabase'
 import { useUser } from '@clerk/clerk-react'
 import { formatCurrency, formatDate } from '../../lib/utils'
@@ -16,7 +16,7 @@ export default function SubscriptionsPage() {
     const [showCreate, setShowCreate] = useState(false)
     const [showPause, setShowPause] = useState(null)
     const [pauseDate, setPauseDate] = useState('')
-    const [newSub, setNewSub] = useState({ product_id: '', quantity: 1, start_date: '' })
+    const [newSub, setNewSub] = useState({ product_id: '', quantity: 1, start_date: '', delivery_slot: 'morning' })
 
     async function togglePause(sub) {
         const newStatus = sub.status === 'active' ? 'paused' : 'active'
@@ -36,19 +36,24 @@ export default function SubscriptionsPage() {
 
     async function addPause() {
         if (!pauseDate) { toast.error('Select a date to pause'); return }
-        // For simplicity, we just show a toast. In a real app, this would insert into a subscription_pauses table.
-        toast.success(`Delivery paused for ${formatDate(pauseDate)} (Demo)`)
-        setShowPause(null)
-        setPauseDate('')
+        try {
+            await pauseSubscriptionDate(showPause, pauseDate)
+            toast.success(`Delivery paused for ${formatDate(pauseDate)}`)
+            setShowPause(null)
+            setPauseDate('')
+            refetch()
+        } catch (err) {
+            toast.error('Failed to pause: ' + err.message)
+        }
     }
 
     async function handleCreate() {
         if (!newSub.product_id || !newSub.start_date) { toast.error('Fill all fields'); return }
         try {
-            await createSubscription(user.id, newSub.product_id, newSub.quantity)
+            await createSubscription(user.id, newSub.product_id, newSub.quantity, newSub.delivery_slot)
             toast.success('Subscription created!')
             setShowCreate(false)
-            setNewSub({ product_id: '', quantity: 1, start_date: '' })
+            setNewSub({ product_id: '', quantity: 1, start_date: '', delivery_slot: 'morning' })
             refetch()
         } catch (err) {
             toast.error(err.message)
@@ -162,6 +167,13 @@ export default function SubscriptionsPage() {
                     <div>
                         <label className="label">Daily Quantity</label>
                         <input className="input" type="number" min={1} max={10} value={newSub.quantity} onChange={e => setNewSub({ ...newSub, quantity: parseInt(e.target.value) })} />
+                    </div>
+                    <div>
+                        <label className="label">Delivery Slot</label>
+                        <select className="input" value={newSub.delivery_slot} onChange={e => setNewSub({ ...newSub, delivery_slot: e.target.value })}>
+                            <option value="morning">Morning (Before 7 AM)</option>
+                            <option value="evening">Evening (After 5 PM)</option>
+                        </select>
                     </div>
                     <div>
                         <label className="label">Start Date</label>

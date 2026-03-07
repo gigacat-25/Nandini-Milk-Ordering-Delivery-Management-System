@@ -73,6 +73,15 @@ export function useDeliveries(dateStr) {
     }, [dateStr])
 }
 
+// --- Subscription Pauses ---
+export function useSubscriptionPauses(dateStr) {
+    return useSupabaseQuery(() => {
+        let query = supabase.from('subscription_pauses').select('*')
+        if (dateStr) query = query.eq('pause_date', dateStr)
+        return query
+    }, [dateStr])
+}
+
 // --- Users / Customers ---
 export function useCustomers() {
     return useSupabaseQuery(() => supabase
@@ -83,11 +92,17 @@ export function useCustomers() {
 }
 
 // --- Mutations Helpers ---
-export async function createOrder(customerId, items, totalAmount) {
+export async function createOrder(customerId, items, totalAmount, deliverySlot = 'morning') {
     // 1. Create order
     const { data: order, error: orderErr } = await supabase
         .from('orders')
-        .insert([{ customer_id: customerId, status: 'confirmed', total_amount: totalAmount, delivery_date: new Date().toISOString().split('T')[0] }])
+        .insert([{
+            customer_id: customerId,
+            status: 'confirmed',
+            total_amount: totalAmount,
+            delivery_date: new Date().toISOString().split('T')[0],
+            delivery_slot: deliverySlot
+        }])
         .select()
         .single()
 
@@ -107,15 +122,31 @@ export async function createOrder(customerId, items, totalAmount) {
     return order
 }
 
-export async function createSubscription(customerId, productId, quantity, frequency = 'daily') {
+export async function createSubscription(customerId, productId, quantity, deliverySlot = 'morning', frequency = 'daily') {
     const { data, error } = await supabase
         .from('subscriptions')
-        .insert([{ customer_id: customerId, product_id: productId, quantity, frequency, status: 'active' }])
+        .insert([{
+            customer_id: customerId,
+            product_id: productId,
+            quantity,
+            frequency,
+            status: 'active',
+            delivery_slot: deliverySlot
+        }])
         .select()
         .single()
 
     if (error) throw error
     return data
+}
+
+export async function pauseSubscriptionDate(subscriptionId, dateStr) {
+    const { error } = await supabase
+        .from('subscription_pauses')
+        .insert([{ subscription_id: subscriptionId, pause_date: dateStr }])
+
+    if (error) throw error
+    return true
 }
 
 export async function upsertUser(clerkUser) {
