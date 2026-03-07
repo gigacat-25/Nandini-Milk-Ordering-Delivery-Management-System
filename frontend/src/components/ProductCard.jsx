@@ -9,7 +9,7 @@ export default function ProductCard({ product }) {
     const categoryColors = {
         Milk: { bg: '#dbeafe', text: '#1e40af', emoji: '🥛' },
         Curd: { bg: '#fef9c3', text: '#854d0e', emoji: '🫙' },
-        Ghee: { bg: '#fef3c7', text: '#92400e', emoji: '🧈' },
+        'Milk Products': { bg: '#fef3c7', text: '#92400e', emoji: '🧈' },
     }
     const colors = categoryColors[product.category] || { bg: '#f1f5f9', text: '#475569' }
 

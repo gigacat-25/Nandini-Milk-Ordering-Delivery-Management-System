@@ -54,7 +54,7 @@ export default function AdminProducts() {
         refetch()
     }
 
-    const categoryEmoji = { Milk: '🥛', Curd: '🫙', Ghee: '🧈' }
+    const categoryEmoji = { Milk: '🥛', Curd: '🫙', 'Milk Products': '🧈' }
 
     if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading products...</div>
 
@@ -126,7 +126,7 @@ export default function AdminProducts() {
                         <div>
                             <label className="label">Category *</label>
                             <select className="input" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                                <option>Milk</option><option>Curd</option><option>Ghee</option>
+                                <option>Milk</option><option>Curd</option><option>Milk Products</option>
                             </select>
                         </div>
                         <div>

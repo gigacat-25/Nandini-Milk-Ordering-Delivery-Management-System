@@ -7,7 +7,7 @@ import { useCartStore } from '../../store'
 import { formatCurrency } from '../../lib/utils'
 import { useNavigate } from 'react-router-dom'
 
-const CATEGORIES = ['All', 'Milk', 'Curd', 'Ghee']
+const CATEGORIES = ['All', 'Milk', 'Curd', 'Milk Products']
 
 export default function ProductsPage() {
     const [activeCategory, setActiveCategory] = useState('All')
@@ -31,7 +31,7 @@ export default function ProductsPage() {
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
             <Navbar />
-            <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
+            <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem 8rem 1.5rem' }}>
                 <div className="page-header">
                     <h1 className="page-title">Our Products</h1>
                     <p className="page-subtitle">Fresh Nandini dairy products delivered daily.</p>
@@ -74,8 +74,22 @@ export default function ProductsPage() {
                         <div style={{ fontWeight: 600 }}>No products found</div>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem' }}>
-                        {filtered.map((p) => <ProductCard key={p.id} product={p} />)}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+                        {CATEGORIES.filter(c => c !== 'All' && (activeCategory === 'All' || activeCategory === c)).map(cat => {
+                            const catProducts = filtered.filter(p => p.category === cat)
+                            if (catProducts.length === 0) return null
+                            return (
+                                <div key={cat} className="fade-in">
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        {cat === 'Milk' ? '🥛' : cat === 'Curd' ? '🫙' : '🧈'}
+                                        {cat}
+                                    </h2>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem' }}>
+                                        {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
             </div>

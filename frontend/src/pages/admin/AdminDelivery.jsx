@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Download, CheckCircle, Clock, MapPin, Phone } from 'lucide-react'
+import { Download, CheckCircle, Clock, MapPin, Phone, MessageSquare, ExternalLink } from 'lucide-react'
 import { useSubscriptions, useCustomers, useSubscriptionPauses } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
@@ -34,6 +34,8 @@ export default function AdminDelivery() {
                 customer: customer?.full_name || 'Unknown',
                 address: customer?.address || 'Address not provided',
                 phone: customer?.phone || 'N/A',
+                google_maps: customer?.google_maps_url,
+                instructions: customer?.delivery_instructions,
                 items: `${sub.quantity}x ${sub.products?.name} (${sub.products?.size_label}) [${sub.delivery_slot}]`,
                 amount: (sub.products?.price || 0) * sub.quantity,
                 status: deliveredIds.has(sub.id) ? 'delivered' : 'pending'
@@ -130,7 +132,17 @@ export default function AdminDelivery() {
                                     <span style={{ fontSize: '0.8125rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                         <Phone size={12} /> {d.phone}
                                     </span>
+                                    {d.google_maps && (
+                                        <a href={d.google_maps} target="_blank" rel="noreferrer" style={{ fontSize: '0.8125rem', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none' }}>
+                                            <ExternalLink size={12} /> Maps
+                                        </a>
+                                    )}
                                 </div>
+                                {d.instructions && (
+                                    <div style={{ fontSize: '0.8125rem', color: '#f59e0b', display: 'flex', alignItems: 'flex-start', gap: '0.35rem', marginTop: '0.35rem', background: '#fffbeb', padding: '0.35rem 0.5rem', borderRadius: 6, border: '1px solid #fef3c7' }}>
+                                        <MessageSquare size={12} style={{ marginTop: 2, flexShrink: 0 }} /> {d.instructions}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Items */}

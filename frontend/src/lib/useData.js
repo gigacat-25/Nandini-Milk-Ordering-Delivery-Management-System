@@ -174,3 +174,18 @@ export async function upsertUser(clerkUser) {
     }
     return data
 }
+
+export async function renewAppAccess(userId) {
+    const nextExpiry = new Date()
+    nextExpiry.setDate(nextExpiry.getDate() + 30)
+
+    const { data, error } = await supabase
+        .from('users')
+        .update({ app_fee_expiry: nextExpiry.toISOString() })
+        .eq('id', userId)
+        .select()
+        .single()
+
+    if (error) throw error
+    return data
+}

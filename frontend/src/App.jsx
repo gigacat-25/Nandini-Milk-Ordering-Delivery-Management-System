@@ -21,8 +21,12 @@ import AdminProducts from './pages/admin/AdminProducts'
 import AdminDelivery from './pages/admin/AdminDelivery'
 import AdminAnalytics from './pages/admin/AdminAnalytics'
 
+// Delivery
+import DeliveryDashboard from './pages/delivery/DeliveryDashboard'
+
 // Route Guards
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute'
+import AppAccessGuard from './components/AppAccessGuard'
 
 export default function App() {
   return (
@@ -42,11 +46,11 @@ export default function App() {
         <Route path="/products" element={<ProductsPage />} />
 
         {/* Customer Routes */}
-        <Route path="/dashboard" element={<ProtectedRoute><CustomerDashboard /></ProtectedRoute>} />
-        <Route path="/order" element={<ProtectedRoute><OrderPage /></ProtectedRoute>} />
-        <Route path="/subscriptions" element={<ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
-        <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><AppAccessGuard><CustomerDashboard /></AppAccessGuard></ProtectedRoute>} />
+        <Route path="/order" element={<ProtectedRoute><AppAccessGuard><OrderPage /></AppAccessGuard></ProtectedRoute>} />
+        <Route path="/subscriptions" element={<ProtectedRoute><AppAccessGuard><SubscriptionsPage /></AppAccessGuard></ProtectedRoute>} />
+        <Route path="/billing" element={<ProtectedRoute><AppAccessGuard><BillingPage /></AppAccessGuard></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><AppAccessGuard><ProfilePage /></AppAccessGuard></ProtectedRoute>} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
@@ -55,6 +59,9 @@ export default function App() {
         <Route path="/admin/products" element={<ProtectedRoute adminOnly><AdminProducts /></ProtectedRoute>} />
         <Route path="/admin/delivery" element={<ProtectedRoute adminOnly><AdminDelivery /></ProtectedRoute>} />
         <Route path="/admin/analytics" element={<ProtectedRoute adminOnly><AdminAnalytics /></ProtectedRoute>} />
+
+        {/* Delivery Routes */}
+        <Route path="/delivery" element={<ProtectedRoute deliveryOnly><DeliveryDashboard /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

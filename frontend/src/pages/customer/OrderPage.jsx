@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar } from 'lucide-react'
+import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar, Navigation, MessageSquare } from 'lucide-react'
 import { useCartStore } from '../../store'
 import { formatCurrency } from '../../lib/utils'
 import { createOrder } from '../../lib/useData'
+import { supabase } from '../../lib/supabase'
 import { useUser } from '@clerk/clerk-react'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
@@ -15,10 +16,24 @@ export default function OrderPage() {
     const { user } = useUser()
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
     const [address, setAddress] = useState('')
+    const [mapsUrl, setMapsUrl] = useState('')
+    const [instructions, setInstructions] = useState('')
     const [deliveryDate, setDeliveryDate] = useState('')
     const [deliverySlot, setDeliverySlot] = useState('morning')
     const [payLoading, setPayLoading] = useState(false)
     const [orderId, setOrderId] = useState('')
+
+    useEffect(() => {
+        if (!user) return
+        supabase.from('users').select('address, google_maps_url, delivery_instructions').eq('id', user.id).single()
+            .then(({ data }) => {
+                if (data) {
+                    if (data.address) setAddress(data.address)
+                    if (data.google_maps_url) setMapsUrl(data.google_maps_url)
+                    if (data.delivery_instructions) setInstructions(data.delivery_instructions)
+                }
+            })
+    }, [user])
 
     async function handlePayment() {
         if (!user) return toast.error('You must be logged in to order')
@@ -26,6 +41,13 @@ export default function OrderPage() {
         try {
             // Simulated payment delay
             await new Promise((r) => setTimeout(r, 1800))
+
+            // Save the address details back to user profile so they persist
+            await supabase.from('users').update({
+                address,
+                google_maps_url: mapsUrl,
+                delivery_instructions: instructions
+            }).eq('id', user.id)
 
             // Actually create the order in Supabase
             const order = await createOrder(user.id, items, total, deliverySlot)
@@ -140,29 +162,51 @@ export default function OrderPage() {
                                         <label className="label"><MapPin size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Address</label>
                                         <textarea
                                             className="input"
-                                            rows={3}
-                                            placeholder="Enter full address..."
+                                            rows={2}
+                                            placeholder="House Number, Street, Landmark..."
                                             value={address}
                                             onChange={(e) => setAddress(e.target.value)}
-                                            style={{ resize: 'none' }}
+                                            style={{ resize: 'vertical' }}
                                         />
                                     </div>
                                     <div>
-                                        <label className="label"><Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Date</label>
+                                        <label className="label"><Navigation size={13} style={{ display: 'inline', marginRight: 4 }} />Google Maps Link</label>
                                         <input
+                                            type="url"
                                             className="input"
-                                            type="date"
-                                            value={deliveryDate}
-                                            onChange={(e) => setDeliveryDate(e.target.value)}
-                                            min={new Date().toISOString().split('T')[0]}
+                                            placeholder="https://maps.google.com/..."
+                                            value={mapsUrl}
+                                            onChange={e => setMapsUrl(e.target.value)}
                                         />
                                     </div>
                                     <div>
-                                        <label className="label">Delivery Slot</label>
-                                        <select className="input" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
-                                            <option value="morning">Morning (Before 7 AM)</option>
-                                            <option value="evening">Evening (After 5 PM)</option>
-                                        </select>
+                                        <label className="label"><MessageSquare size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Instructions (Optional)</label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            placeholder="E.g. Leave at the gate..."
+                                            value={instructions}
+                                            onChange={e => setInstructions(e.target.value)}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                        <div>
+                                            <label className="label"><Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Date</label>
+                                            <input
+                                                className="input"
+                                                type="date"
+                                                value={deliveryDate}
+                                                onChange={(e) => setDeliveryDate(e.target.value)}
+                                                min={new Date().toISOString().split('T')[0]}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="label">Delivery Slot</label>
+                                            <select className="input" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
+                                                <option value="morning">Morning (Before 7 AM)</option>
+                                                <option value="evening">Evening (After 5 PM)</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -238,6 +282,6 @@ export default function OrderPage() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }

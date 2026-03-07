@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   address TEXT,
   delivery_instructions TEXT,
   google_maps_url TEXT,
+  app_fee_expiry TIMESTAMPTZ, -- Tracks users monthly 150rs app access subscription
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -19,7 +20,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 CREATE TABLE IF NOT EXISTS public.products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('Milk', 'Curd', 'Ghee')),
+  category TEXT NOT NULL CHECK (category IN ('Milk', 'Curd', 'Milk Products')),
   size_label TEXT NOT NULL,
   price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
   stock_qty INT DEFAULT 0,
@@ -36,7 +37,8 @@ INSERT INTO public.products (name, category, size_label, price, stock_qty) VALUE
 ('Nandini Full Cream Milk', 'Milk', '500ml Packet', 26.00, 80),
 ('Nandini Curd', 'Curd', '500g Packet', 25.00, 50),
 ('Nandini Thick Curd', 'Curd', '1kg Bucket', 60.00, 30),
-('Nandini Pure Ghee', 'Ghee', '200ml Jar', 140.00, 20);
+('Nandini Pure Ghee', 'Milk Products', '200ml Jar', 140.00, 20),
+('Nandini Fresh Paneer', 'Milk Products', '200g Block', 105.00, 40);
 
 -- 3. Orders table
 CREATE TABLE IF NOT EXISTS public.orders (

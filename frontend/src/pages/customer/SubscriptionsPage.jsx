@@ -174,6 +174,10 @@ export default function SubscriptionsPage() {
                             <option value="morning">Morning (Before 7 AM)</option>
                             <option value="evening">Evening (After 5 PM)</option>
                         </select>
+                        <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: '#64748b', display: 'flex', gap: '0.5rem', background: '#f8fafc', padding: '0.5rem', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                            <span style={{ fontSize: '1rem' }}>📍</span>
+                            <span>Deliveries will be routed to your saved <strong>Profile Settings</strong> address and Google Maps link.</span>
+                        </div>
                     </div>
                     <div>
                         <label className="label">Start Date</label>
