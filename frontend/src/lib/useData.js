@@ -43,7 +43,7 @@ export function useProducts() {
 // --- Orders ---
 export function useOrders(customerId = null) {
     return useSupabaseQuery(() => {
-        let query = supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false })
+        let query = supabase.from('orders').select('*, items:order_items(*, products(*))').order('created_at', { ascending: false })
         if (customerId) {
             query = query.eq('customer_id', customerId)
         }
@@ -92,6 +92,55 @@ export function useSubscriptionPauses(dateStr) {
     }, [dateStr])
 }
 
+// --- Partial Delivery Skips ---
+export function usePartialSkips(dateStr) {
+    return useSupabaseQuery(() => {
+        let query = supabase.from('partial_skips').select('*')
+        if (dateStr) query = query.eq('skip_date', dateStr)
+        return query
+    }, [dateStr])
+}
+
+export function usePartialSkipsForTargets(targetIds) {
+    // We sort the IDs directly inside a useMemo string representation or assume stable ordering
+    const idString = (targetIds || []).join(',')
+    return useSupabaseQuery(() => {
+        let query = supabase.from('partial_skips').select('*')
+        if (targetIds && targetIds.length > 0) {
+            query = query.in('target_id', targetIds)
+        } else {
+            query = query.eq('id', '00000000-0000-0000-0000-000000000000') // fetch none
+        }
+        return query
+    }, [idString])
+}
+
+export async function skipDeliveryItem(dateStr, target_id, product_id) {
+    const { error } = await supabase
+        .from('partial_skips')
+        .insert([{ skip_date: dateStr, target_id, product_id }])
+    if (error) throw error
+    return true
+}
+
+export async function unskipDeliveryItem(dateStr, target_id, product_id) {
+    const { error } = await supabase
+        .from('partial_skips')
+        .delete()
+        .match({ skip_date: dateStr, target_id, product_id })
+    if (error) throw error
+    return true
+}
+
+export async function updateOrderStatus(orderId, status) {
+    const { error } = await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', orderId)
+    if (error) throw error
+    return true
+}
+
 // --- Users / Customers ---
 export function useCustomers() {
     return useSupabaseQuery(() => supabase
@@ -119,7 +168,7 @@ export function useWalletTransactions(customerId) {
 }
 
 // --- Mutations Helpers ---
-export async function createOrder(customerId, items, totalAmount, deliverySlot = 'morning') {
+export async function createOrder(customerId, items, totalAmount, deliverySlot = 'morning', deliveryDate) {
     // 1. Create order
     const { data: order, error: orderErr } = await supabase
         .from('orders')
@@ -127,7 +176,7 @@ export async function createOrder(customerId, items, totalAmount, deliverySlot =
             customer_id: customerId,
             status: 'confirmed',
             total_amount: totalAmount,
-            delivery_date: new Date().toISOString().split('T')[0],
+            delivery_date: deliveryDate || new Date().toISOString().split('T')[0],
             delivery_slot: deliverySlot
         }])
         .select()
@@ -251,6 +300,35 @@ export async function unmarkOrderDelivered(orderId) {
     return true
 }
 
+// --- Delivery Photos ---
+export async function uploadDeliveryPhoto(file, deliveryType, targetId, dateStr) {
+    const ext = (file.name || 'photo.jpg').split('.').pop() || 'jpg'
+    const path = `${dateStr}/${deliveryType}/${targetId}.${ext}`
+    const { error: uploadErr } = await supabase.storage
+        .from('delivery-photos')
+        .upload(path, file, { upsert: true, contentType: file.type })
+    if (uploadErr) throw uploadErr
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('delivery-photos')
+        .getPublicUrl(path)
+
+    const { error: dbErr } = await supabase
+        .from('delivery_photos')
+        .insert([{ delivery_type: deliveryType, target_id: targetId, delivery_date: dateStr, photo_url: publicUrl }])
+    if (dbErr) throw dbErr
+
+    return publicUrl
+}
+
+export function useDeliveryPhotos(dateStr) {
+    return useSupabaseQuery(() => {
+        let query = supabase.from('delivery_photos').select('*')
+        if (dateStr) query = query.eq('delivery_date', dateStr)
+        return query
+    }, [dateStr])
+}
+
 export async function unmarkSubscriptionDelivered(customerId, subscriptionId, dateStr, amount) {
     // 1. Delete the delivery record
     const { error: delErr } = await supabase
@@ -290,7 +368,7 @@ export async function unmarkSubscriptionDelivered(customerId, subscriptionId, da
     return true
 }
 
-export async function addWalletFunds(customerId, amount) {
+export async function addWalletFunds(customerId, amount, description = 'Funds Added via App') {
     // 1. Get current balance
     const { data: user, error: userErr } = await supabase
         .from('users')
@@ -311,9 +389,20 @@ export async function addWalletFunds(customerId, amount) {
         .insert([{
             customer_id: customerId,
             amount: Number(amount),
-            description: 'Funds Added via App'
+            description: description
         }])
     if (txnErr) throw txnErr
+    return true
+}
+
+export async function deleteCustomerAccount(customerId) {
+    // 1. Delete user from supabase (cascade handles cleanup of linked data)
+    const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', customerId)
+
+    if (error) throw error
     return true
 }
 

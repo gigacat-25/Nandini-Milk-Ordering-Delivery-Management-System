@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
-import { CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, Lock } from 'lucide-react'
-import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, useDeliverySession } from '../../lib/useData'
+import { useState, useMemo, useRef } from 'react'
+import { CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, Lock, Camera, X, Image } from 'lucide-react'
+import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, useDeliverySession, usePartialSkips, uploadDeliveryPhoto } from '../../lib/useData'
 import DeliveryNavbar from '../../components/DeliveryNavbar'
 import toast from 'react-hot-toast'
 
@@ -13,12 +13,18 @@ export default function DeliveryDashboard() {
     const { data: orders, loading: ordersLoading, refetch: refetchOrders } = useOrdersByDate(date)
     const { data: completedDeliveries, loading: compLoading, refetch: refetchComp } = useDeliveries(date)
     const { data: deliverySession } = useDeliverySession(date, activeSlot)
+    const { data: partialSkips, loading: skipsLoading } = usePartialSkips(date)
 
     const [updatingId, setUpdatingId] = useState(null)
     const isSessionActive = !!deliverySession
 
-    // Generate daily delivery sheet on the fly
-    // Generate daily delivery sheet combining recurring subscriptions and one-off orders
+    // Photo capture state
+    const [photoModal, setPhotoModal] = useState(null) // { delivery: d }
+    const [photoFile, setPhotoFile] = useState(null)
+    const [photoPreview, setPhotoPreview] = useState(null)
+    const [uploading, setUploading] = useState(false)
+    const fileInputRef = useRef(null)
+
     const deliveries = useMemo(() => {
         if (!subscriptions || !customers || !orders || !completedDeliveries) return []
 
@@ -26,21 +32,19 @@ export default function DeliveryDashboard() {
         const activeSubs = subscriptions.filter(s => {
             if (s.status !== 'active') return false
 
-            // Enforce cutoff: don't show subscriptions created after the cutoff for this target date
             const subCreated = new Date(s.created_at)
             const targetDate = new Date(date)
             let cutoffTime = new Date(targetDate)
 
             if (s.delivery_slot === 'morning') {
-                // Morning cutoff is 3:30 PM the day before
                 cutoffTime.setDate(cutoffTime.getDate() - 1)
                 cutoffTime.setHours(15, 30, 0, 0)
             } else {
-                // Evening cutoff is 7:30 AM the same day
                 cutoffTime.setHours(7, 30, 0, 0)
             }
 
             if (subCreated >= cutoffTime) return false
+            if (s.delivery_slot !== activeSlot) return false
 
             const isPaused = pauses?.some(p => p.subscription_id === s.id && p.pause_date === date)
             return !isPaused
@@ -48,8 +52,9 @@ export default function DeliveryDashboard() {
             const customer = customers.find(c => c.id === sub.customer_id)
             const isDelivered = completedDeliveries.some(d => d.subscription_id === sub.id)
 
-            const subItemsStr = sub.items?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ') || 'No Items'
-            const subAmount = sub.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+            const activeItems = sub.items?.filter(i => !partialSkips?.some(ps => ps.target_id === sub.id && ps.product_id === i.product_id)) || []
+            const subItemsStr = activeItems.map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
+            const subAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
 
             const hasFunds = (customer?.wallet_balance || 0) >= subAmount
             let status = isDelivered ? 'delivered' : 'pending'
@@ -64,16 +69,19 @@ export default function DeliveryDashboard() {
                 phone: customer?.phone || 'N/A',
                 google_maps: customer?.google_maps_url,
                 instructions: customer?.delivery_instructions,
-                items: `${subItemsStr} [${sub.delivery_slot}]`,
-                amount: subAmount,
-                status
+                items: subItemsStr,
+                slot: sub.delivery_slot,
+                status,
+                hasActiveItems: activeItems.length > 0
             }
         })
 
         // 2. Process One-Off Orders
-        const orderDeliveries = orders.map(order => {
+        const orderDeliveries = orders.filter(o => o.delivery_slot === activeSlot).map(order => {
             const customer = order.users
-            const itemsStr = order.items?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
+            const activeItems = order.items?.filter(i => !partialSkips?.some(ps => ps.target_id === order.id && ps.product_id === i.product_id)) || []
+            const itemsStr = activeItems.map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
+            const orderAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
 
             return {
                 id: order.id,
@@ -84,17 +92,45 @@ export default function DeliveryDashboard() {
                 phone: customer?.phone || 'N/A',
                 google_maps: customer?.google_maps_url,
                 instructions: customer?.delivery_instructions,
-                items: `${itemsStr} [${order.delivery_slot}]`,
-                status: order.status === 'delivered' ? 'delivered' : 'pending'
+                items: itemsStr,
+                slot: order.delivery_slot,
+                status: order.status === 'delivered' ? 'delivered' : 'pending',
+                amount: orderAmount,
+                hasActiveItems: activeItems.length > 0
             }
         })
 
-        return [...activeSubs, ...orderDeliveries]
-    }, [subscriptions, customers, pauses, orders, completedDeliveries, date])
+        return [...activeSubs, ...orderDeliveries].filter(d => d.hasActiveItems)
+    }, [subscriptions, customers, pauses, orders, completedDeliveries, date, partialSkips, activeSlot])
 
-    async function handleMarkDelivered(d) {
-        setUpdatingId(d.id)
+    function openPhotoModal(d) {
+        setPhotoModal({ delivery: d })
+        setPhotoFile(null)
+        setPhotoPreview(null)
+    }
+
+    function closePhotoModal() {
+        setPhotoModal(null)
+        setPhotoFile(null)
+        setPhotoPreview(null)
+    }
+
+    function handlePhotoSelect(e) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setPhotoFile(file)
+        setPhotoPreview(URL.createObjectURL(file))
+    }
+
+    async function handleConfirmDelivery() {
+        if (!photoFile || !photoModal) return
+        const d = photoModal.delivery
+        setUploading(true)
         try {
+            // 1. Upload photo
+            await uploadDeliveryPhoto(photoFile, d.type, d.id, date)
+
+            // 2. Mark as delivered
             if (d.type === 'order') {
                 await markOrderDelivered(d.id)
                 await refetchOrders()
@@ -102,12 +138,13 @@ export default function DeliveryDashboard() {
                 await markSubscriptionDelivered(d.customerId, d.id, date, d.amount)
                 await refetchComp()
             }
-            toast.success('Marked as delivered')
+            toast.success('✅ Delivery confirmed with photo!')
+            closePhotoModal()
         } catch (err) {
             console.error(err)
-            toast.error('Failed to mark delivered: ' + err.message)
+            toast.error('Failed to confirm delivery: ' + err.message)
         } finally {
-            setUpdatingId(null)
+            setUploading(false)
         }
     }
 
@@ -155,7 +192,7 @@ export default function DeliveryDashboard() {
                     color: isSessionActive ? '#166534' : '#991b1b'
                 }}>
                     {isSessionActive
-                        ? <><CheckCircle size={16} /> Run is active — you can mark deliveries as complete.</>
+                        ? <><CheckCircle size={16} /> Run is active — tap "Mark as Delivered" to capture proof of delivery.</>
                         : <><Lock size={16} /> Delivery locked. Waiting for admin to start the run.</>}
                 </div>
 
@@ -221,13 +258,36 @@ export default function DeliveryDashboard() {
                                 </div>
                             )}
 
-                            <div style={{ fontSize: '0.875rem', color: '#0f172a', fontWeight: 600, padding: '0.5rem', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                                📦 {d.items}
+                            <div style={{
+                                fontSize: '0.875rem',
+                                color: '#0f172a',
+                                fontWeight: 600,
+                                padding: '0.5rem 0.75rem',
+                                background: '#f8fafc',
+                                borderRadius: 8,
+                                border: '1px solid #e2e8f0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <span>📦 {d.items}</span>
+                                <span style={{
+                                    padding: '0.125rem 0.5rem',
+                                    background: d.slot === 'morning' ? '#eff6ff' : '#fff7ed',
+                                    color: d.slot === 'morning' ? '#2563eb' : '#9a3412',
+                                    borderRadius: 6,
+                                    fontSize: '0.75rem',
+                                    fontWeight: 800,
+                                    textTransform: 'uppercase',
+                                    border: `1px solid ${d.slot === 'morning' ? '#dbeafe' : '#ffedd5'}`
+                                }}>
+                                    {d.slot}
+                                </span>
                             </div>
 
                             {d.status === 'delivered' ? (
-                                <div style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem', background: '#f0fdf4', color: '#166534', borderRadius: 8, fontWeight: 600, fontSize: '0.875rem' }}>
-                                    <CheckCircle size={16} style={{ marginRight: '0.35rem' }} /> Delivered Successfully
+                                <div style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem', background: '#f0fdf4', color: '#166534', borderRadius: 8, fontWeight: 600, fontSize: '0.875rem', gap: '0.4rem', alignItems: 'center' }}>
+                                    <CheckCircle size={16} /> Delivered Successfully
                                 </div>
                             ) : d.status === 'insufficient_funds' ? (
                                 <div style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem', background: '#fee2e2', color: '#dc2626', borderRadius: 8, fontWeight: 600, fontSize: '0.875rem' }}>
@@ -240,18 +300,100 @@ export default function DeliveryDashboard() {
                             ) : (
                                 <button
                                     className="btn-primary"
-                                    onClick={() => handleMarkDelivered(d)}
+                                    onClick={() => openPhotoModal(d)}
                                     disabled={updatingId === d.id}
                                     style={{ width: '100%', justifyContent: 'center', padding: '0.75rem', fontSize: '0.9rem' }}
                                 >
-                                    {updatingId === d.id ? <Loader2 size={16} className="spin" /> : <CheckCircle size={16} />}
-                                    {updatingId === d.id ? 'Saving...' : 'Mark as Delivered'}
+                                    <Camera size={16} />
+                                    Mark as Delivered
                                 </button>
                             )}
                         </div>
                     ))}
                 </div>
             </div>
+
+            {/* Photo Capture Modal */}
+            {photoModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+                    display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '1.25rem 1.25rem 0 0',
+                        padding: '1.5rem', width: '100%', maxWidth: 480,
+                        display: 'flex', flexDirection: 'column', gap: '1rem'
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 800, fontSize: '1.0625rem', color: '#0f172a' }}>📷 Proof of Delivery</div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Take a photo showing the delivered items</div>
+                            </div>
+                            <button onClick={closePhotoModal} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                <X size={16} color="#64748b" />
+                            </button>
+                        </div>
+
+                        {/* Customer info */}
+                        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem', fontSize: '0.875rem', color: '#374151' }}>
+                            <strong>{photoModal.delivery.customer}</strong> — {photoModal.delivery.items}
+                        </div>
+
+                        {/* Photo Preview / Picker */}
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                                border: '2px dashed #cbd5e1', borderRadius: 12, padding: '1.5rem',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                gap: '0.5rem', cursor: 'pointer', minHeight: 180,
+                                background: photoPreview ? 'transparent' : '#f8fafc',
+                                position: 'relative', overflow: 'hidden'
+                            }}
+                        >
+                            {photoPreview ? (
+                                <img src={photoPreview} alt="Preview" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 8 }} />
+                            ) : (
+                                <>
+                                    <div style={{ width: 56, height: 56, background: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Camera size={24} color="#2563eb" />
+                                    </div>
+                                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.9375rem' }}>Take / Choose Photo</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Tap to open camera or gallery</div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Hidden file input — capture="environment" opens rear camera on mobile */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            style={{ display: 'none' }}
+                            onChange={handlePhotoSelect}
+                        />
+
+                        {photoPreview && (
+                            <button
+                                onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
+                                style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0.5rem', fontSize: '0.8125rem', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                            >
+                                <Image size={14} /> Choose a different photo
+                            </button>
+                        )}
+
+                        <button
+                            className="btn-primary"
+                            onClick={handleConfirmDelivery}
+                            disabled={!photoFile || uploading}
+                            style={{ width: '100%', justifyContent: 'center', padding: '0.85rem', fontSize: '1rem', opacity: (!photoFile || uploading) ? 0.5 : 1 }}
+                        >
+                            {uploading ? <><Loader2 size={18} className="spin" /> Uploading...</> : <><CheckCircle size={18} /> Confirm Delivery</>}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

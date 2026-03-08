@@ -1,29 +1,36 @@
 import { useState } from 'react'
-import { Search, Eye, Mail, Phone } from 'lucide-react'
-import { useCustomers, useOrders, useSubscriptions } from '../../lib/useData'
+import { Search, Eye, Mail, Phone, Edit2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { useCustomers, useOrders, useSubscriptions, addWalletFunds, deleteCustomerAccount, renewAppAccess } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
+import toast from 'react-hot-toast'
 import Navbar from '../../components/Navbar'
 import Modal from '../../components/Modal'
 
 export default function AdminCustomers() {
-    const { data: customers, loading: customersLoading } = useCustomers()
+    const { data: customers, loading: customersLoading, refetch: refetchCustomers } = useCustomers()
     const { data: orders, loading: ordersLoading } = useOrders()
     const { data: subscriptions, loading: subsLoading } = useSubscriptions()
 
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState(null)
+    const [loadingAction, setLoadingAction] = useState(false)
 
     // Compute stats on the fly
     const computedCustomers = (customers || []).map(c => {
         const cOrders = (orders || []).filter(o => o.customer_id === c.id)
         const cSubs = (subscriptions || []).filter(s => s.customer_id === c.id)
 
+        const appExpiry = c.app_fee_expiry ? new Date(c.app_fee_expiry) : null
+        const hasAppAccess = appExpiry && appExpiry > new Date()
+
         return {
             ...c,
             total_orders: cOrders.length,
             total_spent: cOrders.reduce((sum, o) => sum + o.total_amount, 0),
             subscriptions: cSubs.length,
-            active_subscriptions: cSubs.filter(s => s.status === 'active').length
+            active_subscriptions: cSubs.filter(s => s.status === 'active').length,
+            hasAppAccess,
+            appExpiry
         }
     })
 
@@ -33,7 +40,68 @@ export default function AdminCustomers() {
         c.email?.toLowerCase().includes(search.toLowerCase())
     )
 
-    if (customersLoading || ordersLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading customers...</div>
+    if (customersLoading || ordersLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}><Loader2 className="spin" size={32} /></div>
+
+    async function handleRenewSubscription(customer) {
+        if (!confirm(`Are you sure you want to manually grant/renew 30 days of App Access for ${customer.full_name || 'this customer'}?`)) return
+
+        setLoadingAction(true)
+        try {
+            await renewAppAccess(customer.id)
+            await refetchCustomers()
+            toast.success('App Access renewed for 30 days')
+        } catch (err) {
+            toast.error('Failed to renew access: ' + err.message)
+        } finally {
+            setLoadingAction(false)
+        }
+    }
+
+    async function handleEditWallet(customer) {
+        const rawAmount = prompt(`Current Wallet Balance: ${formatCurrency(customer.wallet_balance || 0)}\n\nEnter amount to add (use negative e.g., -50 to deduct):`)
+        if (!rawAmount) return
+
+        const amount = Number(rawAmount)
+        if (isNaN(amount)) return toast.error('Invalid amount')
+
+        const desc = prompt('Enter a reason/description for this adjustment:', 'Admin Manual Adjustment')
+        if (!desc) return
+
+        setLoadingAction(true)
+        try {
+            await addWalletFunds(customer.id, amount, desc)
+            await refetchCustomers()
+            toast.success('Wallet updated successfully')
+            setSelected(null)
+        } catch (err) {
+            toast.error('Failed to update wallet: ' + err.message)
+        } finally {
+            setLoadingAction(false)
+        }
+    }
+
+    async function handleDeleteAccount(customer) {
+        let msg = `WARNING: Are you sure you want to completely delete ${customer.full_name}'s account?\n\nThis will instantly delete ALL their subscriptions, orders, and wallet history. This action CANNOT be reversed. `
+
+        if (customer.wallet_balance > 0) {
+            msg += `\n\n📌 NOTE: They have an outstanding Wallet Balance of ${formatCurrency(customer.wallet_balance)}. YOU MUST REFUND them this amount manually before/after doing this!`
+        }
+
+        if (!confirm(msg)) return
+        if (!confirm('Type OK if you are absolutely sure you want to eradicate this customer data from the system.')) return
+
+        setLoadingAction(true)
+        try {
+            await deleteCustomerAccount(customer.id)
+            await refetchCustomers()
+            toast.success('Account completely deleted')
+            setSelected(null)
+        } catch (err) {
+            toast.error('Failed to delete account: ' + err.message)
+        } finally {
+            setLoadingAction(false)
+        }
+    }
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -45,11 +113,11 @@ export default function AdminCustomers() {
                 </div>
 
                 {/* Stats */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     {[
                         { label: 'Total Customers', value: computedCustomers.length },
-                        { label: 'Active Subscriptions', value: computedCustomers.reduce((s, c) => s + c.active_subscriptions, 0) },
-                        { label: 'Total Orders', value: computedCustomers.reduce((s, c) => s + c.total_orders, 0) },
+                        { label: 'Active Milk Subs', value: computedCustomers.reduce((s, c) => s + c.active_subscriptions, 0) },
+                        { label: 'Active App Access', value: computedCustomers.filter(c => c.hasAppAccess).length },
                         { label: 'Total Revenue', value: formatCurrency(computedCustomers.reduce((s, c) => s + c.total_spent, 0)) },
                     ].map((s) => (
                         <div key={s.label} className="card" style={{ textAlign: 'center', padding: '1rem' }}>
@@ -74,7 +142,8 @@ export default function AdminCustomers() {
                                     <th>Customer</th>
                                     <th>Contact</th>
                                     <th>Clerk ID</th>
-                                    <th>Subscriptions</th>
+                                    <th>App Access</th>
+                                    <th>Milk Subs</th>
                                     <th>Total Orders</th>
                                     <th>Total Spent</th>
                                     <th>Wallet Amount</th>
@@ -105,7 +174,10 @@ export default function AdminCustomers() {
                                         </td>
                                         <td style={{ fontSize: '0.8125rem', color: '#64748b', maxWidth: 160 }}>{c.id.substring(0, 10)}...</td>
                                         <td>
-                                            <span className={c.active_subscriptions > 0 ? 'badge-success' : 'badge-gray'}>{c.active_subscriptions} active</span>
+                                            <span className={c.hasAppAccess ? 'badge-success' : 'badge-warning'}>{c.hasAppAccess ? 'Active' : 'Expired'}</span>
+                                        </td>
+                                        <td>
+                                            <span className={c.active_subscriptions > 0 ? 'badge-blue' : 'badge-gray'}>{c.active_subscriptions} active</span>
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{c.total_orders}</td>
                                         <td style={{ fontWeight: 700, color: '#2563eb' }}>{formatCurrency(c.total_spent)}</td>
@@ -152,20 +224,33 @@ export default function AdminCustomers() {
                             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Clerk ID</div>
                             <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{selected.id}</div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
                             {[
-                                { label: 'Subscriptions', value: selected.active_subscriptions },
+                                { label: 'Milk Subs', value: selected.active_subscriptions },
+                                { label: 'App Access', value: selected.hasAppAccess ? 'Active' : 'Expired', highlight: selected.hasAppAccess },
                                 { label: 'Total Orders', value: selected.total_orders },
                                 { label: 'Total Spent', value: formatCurrency(selected.total_spent) },
+                                { label: 'Wallet Balance', value: formatCurrency(selected.wallet_balance || 0), highlight: true },
                             ].map(s => (
-                                <div key={s.label} style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: 8, textAlign: 'center' }}>
-                                    <div style={{ fontWeight: 800, fontSize: '1.125rem', color: '#2563eb' }}>{s.value}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{s.label}</div>
+                                <div key={s.label} style={{ background: s.highlight ? '#dcfce7' : '#f8fafc', padding: '0.75rem', borderRadius: 8, textAlign: 'center', border: s.highlight ? '1px solid #86efac' : 'none' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '1.125rem', color: s.highlight ? '#166534' : '#2563eb' }}>{s.value}</div>
+                                    <div style={{ fontSize: '0.75rem', color: s.highlight ? '#15803d' : '#64748b' }}>{s.label}</div>
                                 </div>
                             ))}
                         </div>
-                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                            <button className="btn-secondary" onClick={() => setSelected(null)}>Close</button>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+                            <button className="btn-secondary" onClick={() => handleDeleteAccount(selected)} disabled={loadingAction} style={{ color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2', display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                {loadingAction ? <Loader2 size={16} className="spin" /> : <AlertTriangle size={16} />} Delete Account
+                            </button>
+                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                <button className="btn-secondary" onClick={() => handleRenewSubscription(selected)} disabled={loadingAction} style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                    {loadingAction ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />} Renew Access
+                                </button>
+                                <button className="btn-primary" onClick={() => handleEditWallet(selected)} disabled={loadingAction} style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                    {loadingAction ? <Loader2 size={16} className="spin" /> : <Edit2 size={16} />} Edit Wallet
+                                </button>
+                                <button className="btn-secondary" onClick={() => setSelected(null)}>Close</button>
+                            </div>
                         </div>
                     </div>
                 </Modal>

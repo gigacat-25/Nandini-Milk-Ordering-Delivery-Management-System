@@ -52,7 +52,7 @@ export default function Navbar() {
                 }}>
                     <Milk size={20} color="white" />
                 </div>
-                <div>
+                <div className="hidden sm:block">
                     <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>Nandini</div>
                     <div style={{ fontSize: '0.6875rem', color: '#64748b', lineHeight: 1.1 }}>Vaderhalli Store</div>
                 </div>

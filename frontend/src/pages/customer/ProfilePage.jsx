@@ -5,8 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { renewAppAccess, useUserProfile } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
-import { formatCurrency } from '../../lib/utils'
-
+import { formatCurrency, formatDate } from '../../lib/utils'
 export default function ProfilePage() {
     const { user, isLoaded } = useUser()
     const { data: userProfile, refetch: refetchProfile } = useUserProfile(user?.id)
@@ -101,6 +100,7 @@ export default function ProfilePage() {
     const expiry = userProfile?.app_fee_expiry ? new Date(userProfile.app_fee_expiry) : null
     const isExpired = !expiry || expiry < new Date()
     const daysLeft = expiry ? Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)) : 0
+    const formattedExpiry = userProfile?.app_fee_expiry ? formatDate(userProfile.app_fee_expiry) : ''
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -125,20 +125,22 @@ export default function ProfilePage() {
                             <div style={{ color: isExpired ? '#991b1b' : '#15803d', fontSize: '0.875rem' }}>
                                 {isExpired
                                     ? 'Pay ₹150 to unlock daily milk subscriptions and free one-time deliveries.'
-                                    : `Your access is valid for ${daysLeft} more days. Free delivery enabled.`}
+                                    : `Your access is valid for ${daysLeft} more days (Expires on ${formattedExpiry}). Free delivery enabled.`}
                             </div>
                         </div>
 
                         <button
                             className="btn-primary"
                             onClick={handlePayment}
-                            disabled={paying}
+                            disabled={paying || (!isExpired && daysLeft > 5)}
+                            title={!isExpired && daysLeft > 5 ? 'You can renew when 5 or less days are remaining.' : ''}
                             style={{
                                 background: isExpired ? '#2563eb' : 'white',
                                 color: isExpired ? 'white' : '#2563eb',
                                 border: isExpired ? 'none' : '1px solid #2563eb',
                                 padding: '0.6rem 1.2rem',
-                                opacity: paying ? 0.7 : 1
+                                opacity: (paying || (!isExpired && daysLeft > 5)) ? 0.5 : 1,
+                                cursor: (!isExpired && daysLeft > 5) ? 'not-allowed' : 'pointer'
                             }}
                         >
                             {paying ? 'Processing...' : isExpired ? `Pay ₹150` : 'Renew for ₹150'}

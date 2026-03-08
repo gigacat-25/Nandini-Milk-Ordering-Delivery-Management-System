@@ -86,7 +86,7 @@ export default function AdminAnalytics() {
                 </div>
 
                 {/* Charts Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                <div className="flex flex-col lg:grid lg:grid-cols-[2fr_1fr] gap-6 mb-6">
                     {/* Revenue Trend */}
                     <div className="card">
                         <h3 style={{ margin: '0 0 1.5rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Monthly Revenue Trend</h3>

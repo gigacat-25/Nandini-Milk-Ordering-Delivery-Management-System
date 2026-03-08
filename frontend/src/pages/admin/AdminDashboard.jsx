@@ -48,7 +48,7 @@ export default function AdminDashboard() {
                     <StatsCard icon={AlertTriangle} label="Actionable Orders" value={pendingOrders} sub="Need delivery" color="#dc2626" bg="#fee2e2" />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 mb-6">
                     {/* Tomorrow's Stock Requirement */}
                     <div className="card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>

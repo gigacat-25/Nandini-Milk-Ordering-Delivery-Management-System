@@ -132,7 +132,7 @@ export default function OrderPage() {
                     return
                 }
 
-                const order = await createOrder(user.id, items, total, deliverySlot)
+                const order = await createOrder(user.id, items, total, deliverySlot, deliveryDate)
                 await addWalletFunds(user.id, -total) // Deduct total from wallet
                 setOrderId(order.id.slice(0, 8).toUpperCase())
             }
@@ -195,7 +195,7 @@ export default function OrderPage() {
                     ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.5rem' }}>
+                <div className="flex flex-col lg:grid lg:grid-cols-[1fr_340px] gap-6">
                     {/* Left panel */}
                     <div>
                         {step === 1 && (
@@ -213,7 +213,7 @@ export default function OrderPage() {
                                 </div>
                                 <div className="card">
                                     <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem' }}>Order Type</h2>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                    <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
                                         <button className={orderType === 'one-time' ? 'btn-primary' : 'btn-secondary'} onClick={() => setOrderType('one-time')} style={{ justifyContent: 'center' }}>One-Time Order</button>
                                         <button className={orderType === 'subscription' ? 'btn-primary' : 'btn-secondary'} onClick={() => setOrderType('subscription')} style={{ justifyContent: 'center' }}>Subscribe</button>
                                     </div>
@@ -293,7 +293,7 @@ export default function OrderPage() {
                                             onChange={e => setInstructions(e.target.value)}
                                         />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                    <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4 mt-2">
                                         {orderType === 'one-time' ? (
                                             <div>
                                                 <label className="label"><Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Date</label>

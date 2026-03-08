@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ShoppingBag, RefreshCw, Truck, IndianRupee, ChevronRight, Package } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
-import { useOrders, useSubscriptions } from '../../lib/useData'
+import { useOrders, useSubscriptions, usePartialSkips } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 
@@ -9,16 +9,22 @@ export default function CustomerDashboard() {
     const { user, isLoaded } = useUser()
     const { data: ordersData, loading: ordersLoading } = useOrders(user?.id)
     const { data: subsData, loading: subsLoading } = useSubscriptions(user?.id)
+    const todayDateStr = new Date().toISOString().split('T')[0]
+    const { data: partialSkips, loading: skipsLoading } = usePartialSkips(todayDateStr)
 
-    const todayDeliveries = (subsData || []).filter(s => s.status === 'active')
+    const todayDeliveries = (subsData || []).filter(s => s.status === 'active').map(s => {
+        const activeItems = s.items?.filter(i => !partialSkips?.some(ps => ps.target_id === s.id && ps.product_id === i.product_id)) || []
+        return { ...s, activeItems }
+    }).filter(s => s.activeItems.length > 0)
+
     const recentOrders = (ordersData || []).slice(0, 3)
 
     const monthlyTotal = todayDeliveries.reduce((sum, s) => {
-        const subTotal = s.items?.reduce((itemSum, i) => itemSum + (i.price_at_time * i.quantity), 0) || 0
+        const subTotal = s.activeItems?.reduce((itemSum, i) => itemSum + (i.price_at_time * i.quantity), 0) || 0
         return sum + subTotal * 30
     }, 0)
 
-    if (!isLoaded || ordersLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading dashboard...</div>
+    if (!isLoaded || ordersLoading || subsLoading || skipsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading dashboard...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -52,7 +58,7 @@ export default function CustomerDashboard() {
                     ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
                     {/* Today's Deliveries */}
                     <div className="card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
@@ -72,8 +78,8 @@ export default function CustomerDashboard() {
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 {todayDeliveries.map((s) => {
-                                    const itemsStr = s.items?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ') || 'No Items'
-                                    const subTotal = s.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+                                    const itemsStr = s.activeItems?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ') || 'No Items'
+                                    const subTotal = s.activeItems?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
 
                                     return (
                                         <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: 8, alignItems: 'center' }}>
@@ -102,11 +108,11 @@ export default function CustomerDashboard() {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {recentOrders.map((o) => {
-                                const badgeClass = o.status === 'delivered' ? 'badge-success' : o.status === 'confirmed' ? 'badge-blue' : 'badge-warning'
+                                const badgeClass = o.status === 'delivered' ? 'badge-success' : o.status === 'cancelled' ? 'badge-danger' : o.status === 'confirmed' ? 'badge-blue' : 'badge-warning'
                                 return (
                                     <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: 8, alignItems: 'center' }}>
                                         <div>
-                                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#0f172a' }}>{o.id}</div>
+                                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#0f172a' }}>Order #{o.id.slice(0, 8).toUpperCase()}</div>
                                             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{formatDate(o.delivery_date)}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>

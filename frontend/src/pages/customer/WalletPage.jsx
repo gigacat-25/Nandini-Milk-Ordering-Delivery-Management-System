@@ -44,7 +44,7 @@ export default function WalletPage() {
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
             <Navbar />
             <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem' }}>
-                <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div className="page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="page-title">Wallet & Payments</h1>
                         <p className="page-subtitle">Manage your prepaid balance for daily deliveries.</p>
@@ -55,15 +55,11 @@ export default function WalletPage() {
                 </div>
 
                 {/* Wallet Balance Card */}
-                <div className="card fade-in" style={{
+                <div className="card fade-in flex flex-col sm:flex-row justify-between items-center sm:p-8 p-5" style={{
                     background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
                     color: 'white',
                     marginBottom: '2rem',
-                    border: 'none',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '2rem'
+                    border: 'none'
                 }}>
                     <div>
                         <div style={{ fontSize: '0.875rem', opacity: 0.9, marginBottom: '0.5rem' }}>Current Balance</div>
