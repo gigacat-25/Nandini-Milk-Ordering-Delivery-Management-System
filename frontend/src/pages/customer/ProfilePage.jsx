@@ -2,13 +2,18 @@ import { useState, useEffect } from 'react'
 import { Save, MapPin, Navigation, Info } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { supabase } from '../../lib/supabase'
+import { renewAppAccess, useUserProfile } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
+import { formatCurrency } from '../../lib/utils'
 
 export default function ProfilePage() {
     const { user, isLoaded } = useUser()
+    const { data: userProfile, refetch: refetchProfile } = useUserProfile(user?.id)
+
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [paying, setPaying] = useState(false)
     const [profile, setProfile] = useState({
         address: '',
         delivery_instructions: '',
@@ -76,7 +81,26 @@ export default function ProfilePage() {
         }
     }
 
+    async function handlePayment() {
+        if (!user) return
+        setPaying(true)
+        try {
+            await new Promise(r => setTimeout(r, 1500))
+            await renewAppAccess(user.id)
+            toast.success('App subscription renewed successfully!')
+            refetchProfile()
+        } catch (err) {
+            toast.error('Failed to process payment. Please try again.')
+        } finally {
+            setPaying(false)
+        }
+    }
+
     if (!isLoaded || loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading profile...</div>
+
+    const expiry = userProfile?.app_fee_expiry ? new Date(userProfile.app_fee_expiry) : null
+    const isExpired = !expiry || expiry < new Date()
+    const daysLeft = expiry ? Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24)) : 0
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -87,6 +111,39 @@ export default function ProfilePage() {
                     <p style={{ color: '#64748b', margin: 0, fontSize: '0.9375rem' }}>
                         Help us find your location easily for daily morning deliveries.
                     </p>
+                </div>
+
+                {/* Subscriptions Section */}
+                <div className="card" style={{ marginBottom: '2rem' }}>
+                    <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem' }}>Monthly App Access</h2>
+
+                    <div style={{ background: isExpired ? '#fee2e2' : '#f0fdf4', padding: '1.25rem', borderRadius: 12, border: '1px solid', borderColor: isExpired ? '#fca5a5' : '#86efac', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div>
+                            <div style={{ fontWeight: 700, color: isExpired ? '#b91c1c' : '#166534', fontSize: '1.05rem', marginBottom: '0.25rem' }}>
+                                {isExpired ? '❌ Subscription Required' : '✅ Active Subscription'}
+                            </div>
+                            <div style={{ color: isExpired ? '#991b1b' : '#15803d', fontSize: '0.875rem' }}>
+                                {isExpired
+                                    ? 'Pay ₹150 to unlock daily milk subscriptions and free one-time deliveries.'
+                                    : `Your access is valid for ${daysLeft} more days. Free delivery enabled.`}
+                            </div>
+                        </div>
+
+                        <button
+                            className="btn-primary"
+                            onClick={handlePayment}
+                            disabled={paying}
+                            style={{
+                                background: isExpired ? '#2563eb' : 'white',
+                                color: isExpired ? 'white' : '#2563eb',
+                                border: isExpired ? 'none' : '1px solid #2563eb',
+                                padding: '0.6rem 1.2rem',
+                                opacity: paying ? 0.7 : 1
+                            }}
+                        >
+                            {paying ? 'Processing...' : isExpired ? `Pay ₹150` : 'Renew for ₹150'}
+                        </button>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSave} className="card">

@@ -13,7 +13,10 @@ export default function CustomerDashboard() {
     const todayDeliveries = (subsData || []).filter(s => s.status === 'active')
     const recentOrders = (ordersData || []).slice(0, 3)
 
-    const monthlyTotal = todayDeliveries.reduce((sum, s) => sum + (s.products?.price || 0) * s.quantity * 30, 0)
+    const monthlyTotal = todayDeliveries.reduce((sum, s) => {
+        const subTotal = s.items?.reduce((itemSum, i) => itemSum + (i.price_at_time * i.quantity), 0) || 0
+        return sum + subTotal * 30
+    }, 0)
 
     if (!isLoaded || ordersLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading dashboard...</div>
 
@@ -68,18 +71,23 @@ export default function CustomerDashboard() {
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {todayDeliveries.map((s) => (
-                                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: 8, alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a' }}>{s.products?.name || 'Unknown Product'}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.products?.size_label || 'Standard'} × {s.quantity}</div>
+                                {todayDeliveries.map((s) => {
+                                    const itemsStr = s.items?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ') || 'No Items'
+                                    const subTotal = s.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+
+                                    return (
+                                        <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: 8, alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a' }}>Subscription</div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{itemsStr}</div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontWeight: 700, color: '#2563eb', fontSize: '0.9rem' }}>{formatCurrency(subTotal)}/delivery</div>
+                                                <span className="badge-success" style={{ fontSize: '0.7rem' }}>Active</span>
+                                            </div>
                                         </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontWeight: 700, color: '#2563eb', fontSize: '0.9rem' }}>{formatCurrency((s.products?.price || 0) * s.quantity)}</div>
-                                            <span className="badge-success" style={{ fontSize: '0.7rem' }}>Active</span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         )}
                     </div>

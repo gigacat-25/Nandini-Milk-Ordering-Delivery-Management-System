@@ -17,7 +17,6 @@ export default function Navbar() {
     const navLinks = isAdmin
         ? [
             { to: '/admin', label: 'Dashboard' },
-            { to: '/admin/orders', label: 'Orders' },
             { to: '/admin/customers', label: 'Customers' },
             { to: '/admin/products', label: 'Products' },
             { to: '/admin/delivery', label: 'Delivery' },
@@ -26,7 +25,8 @@ export default function Navbar() {
         : [
             { to: '/products', label: 'Products' },
             { to: '/subscriptions', label: 'Subscriptions' },
-            { to: '/billing', label: 'Billing' },
+            { to: '/previous-orders', label: 'Previous Orders' },
+            { to: '/wallet', label: 'Wallet' },
             { to: '/profile', label: 'Settings' },
         ]
 

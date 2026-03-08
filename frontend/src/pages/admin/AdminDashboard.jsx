@@ -80,8 +80,8 @@ export default function AdminDashboard() {
                     <div className="card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                             <h2 style={{ margin: 0, fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a' }}>Recent Orders</h2>
-                            <Link to="/admin/orders" style={{ color: '#2563eb', fontSize: '0.8125rem', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                View All <ChevronRight size={14} />
+                            <Link to="/admin/delivery" style={{ color: '#2563eb', fontSize: '0.8125rem', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                Manage Delivery <ChevronRight size={14} />
                             </Link>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
@@ -104,9 +104,8 @@ export default function AdminDashboard() {
                 {/* Quick Actions */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                     {[
-                        { to: '/admin/orders', icon: ShoppingBag, label: 'Manage Orders', color: '#2563eb', bg: '#dbeafe' },
-                        { to: '/admin/customers', icon: Users, label: 'Customers', color: '#059669', bg: '#d1fae5' },
                         { to: '/admin/delivery', icon: Truck, label: 'Delivery Report', color: '#7c3aed', bg: '#ede9fe' },
+                        { to: '/admin/customers', icon: Users, label: 'Customers', color: '#059669', bg: '#d1fae5' },
                         { to: '/admin/products', icon: Package, label: 'Products', color: '#f59e0b', bg: '#fef3c7' },
                         { to: '/admin/analytics', icon: TrendingUp, label: 'Analytics', color: '#dc2626', bg: '#fee2e2' },
                     ].map((a) => (

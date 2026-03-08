@@ -2,6 +2,13 @@
 -- Note: This is a fresh schema designed to work with Clerk Authentication.
 -- Users' IDs will be Clerk User IDs (e.g. 'user_2xyz...'), which are TEXT strings.
 
+-- IMPORTANT: RUN THESE DROPS MANUALLY FIRST TO CLEAR OLD DATA BEFORE RUNNING THE CREATE SCRIPTS
+-- DROP TABLE IF EXISTS public.wallet_transactions CASCADE;
+-- DROP TABLE IF EXISTS public.deliveries CASCADE;
+-- DROP TABLE IF EXISTS public.subscription_pauses CASCADE;
+-- DROP TABLE IF EXISTS public.subscription_items CASCADE;
+-- DROP TABLE IF EXISTS public.subscriptions CASCADE;
+
 -- 1. Users table
 CREATE TABLE IF NOT EXISTS public.users (
   id TEXT PRIMARY KEY, -- Clerk User ID
@@ -12,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   delivery_instructions TEXT,
   google_maps_url TEXT,
   app_fee_expiry TIMESTAMPTZ, -- Tracks users monthly 150rs app access subscription
+  wallet_balance NUMERIC(10, 2) DEFAULT 0, -- Prepaid wallet balance
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -65,13 +73,21 @@ CREATE TABLE IF NOT EXISTS public.order_items (
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   customer_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES public.products(id),
-  quantity INT NOT NULL CHECK (quantity > 0),
   frequency TEXT NOT NULL DEFAULT 'daily',
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'cancelled')),
   delivery_slot TEXT NOT NULL DEFAULT 'morning' CHECK (delivery_slot IN ('morning', 'evening')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5a. Subscription Items table
+CREATE TABLE IF NOT EXISTS public.subscription_items (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  subscription_id UUID NOT NULL REFERENCES public.subscriptions(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id),
+  quantity INT NOT NULL CHECK (quantity > 0),
+  price_at_time NUMERIC(10, 2) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 5a. Subscription Pauses table (to store skipped dates)
@@ -93,6 +109,15 @@ CREATE TABLE IF NOT EXISTS public.deliveries (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. Wallet Transactions table
+CREATE TABLE IF NOT EXISTS public.wallet_transactions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  amount NUMERIC(10, 2) NOT NULL,
+  description TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Disable Row Level Security (RLS) for Development MVP
 -- Warning: In a production environment, you should ENABLE RLS and set up Clerk Supabase JWT authentication.
 -- See https://clerk.com/docs/integrations/databases/supabase for production RLS setup.
@@ -101,8 +126,10 @@ ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscription_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscription_pauses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deliveries DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wallet_transactions DISABLE ROW LEVEL SECURITY;
 
 -- Grant access to Supabase API roles (anon and authenticated)
 -- This is necessary because recreating the schema clears the default API permissions

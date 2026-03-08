@@ -77,6 +77,7 @@ export default function AdminCustomers() {
                                     <th>Subscriptions</th>
                                     <th>Total Orders</th>
                                     <th>Total Spent</th>
+                                    <th>Wallet Amount</th>
                                     <th>Joined</th>
                                     <th></th>
                                 </tr>
@@ -108,6 +109,7 @@ export default function AdminCustomers() {
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{c.total_orders}</td>
                                         <td style={{ fontWeight: 700, color: '#2563eb' }}>{formatCurrency(c.total_spent)}</td>
+                                        <td style={{ fontWeight: 700, color: '#059669' }}>{formatCurrency(c.wallet_balance || 0)}</td>
                                         <td style={{ color: '#64748b', fontSize: '0.8125rem' }}>{formatDate(c.created_at)}</td>
                                         <td>
                                             <button className="btn-secondary" style={{ padding: '0.375rem 0.625rem', fontSize: '0.8125rem' }} onClick={() => setSelected(c)}>

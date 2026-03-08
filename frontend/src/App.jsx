@@ -10,12 +10,12 @@ import CustomerDashboard from './pages/customer/CustomerDashboard'
 import ProductsPage from './pages/customer/ProductsPage'
 import OrderPage from './pages/customer/OrderPage'
 import SubscriptionsPage from './pages/customer/SubscriptionsPage'
-import BillingPage from './pages/customer/BillingPage'
+import PreviousOrdersPage from './pages/customer/PreviousOrdersPage'
+import WalletPage from './pages/customer/WalletPage'
 import ProfilePage from './pages/customer/ProfilePage'
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard'
-import AdminOrders from './pages/admin/AdminOrders'
 import AdminCustomers from './pages/admin/AdminCustomers'
 import AdminProducts from './pages/admin/AdminProducts'
 import AdminDelivery from './pages/admin/AdminDelivery'
@@ -46,15 +46,15 @@ export default function App() {
         <Route path="/products" element={<ProductsPage />} />
 
         {/* Customer Routes */}
-        <Route path="/dashboard" element={<ProtectedRoute><AppAccessGuard><CustomerDashboard /></AppAccessGuard></ProtectedRoute>} />
-        <Route path="/order" element={<ProtectedRoute><AppAccessGuard><OrderPage /></AppAccessGuard></ProtectedRoute>} />
-        <Route path="/subscriptions" element={<ProtectedRoute><AppAccessGuard><SubscriptionsPage /></AppAccessGuard></ProtectedRoute>} />
-        <Route path="/billing" element={<ProtectedRoute><AppAccessGuard><BillingPage /></AppAccessGuard></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><AppAccessGuard><ProfilePage /></AppAccessGuard></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><CustomerDashboard /></ProtectedRoute>} />
+        <Route path="/order" element={<ProtectedRoute><OrderPage /></ProtectedRoute>} />
+        <Route path="/subscriptions" element={<ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
+        <Route path="/previous-orders" element={<ProtectedRoute><PreviousOrdersPage /></ProtectedRoute>} />
+        <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
-        <Route path="/admin/orders" element={<ProtectedRoute adminOnly><AdminOrders /></ProtectedRoute>} />
         <Route path="/admin/customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
         <Route path="/admin/products" element={<ProtectedRoute adminOnly><AdminProducts /></ProtectedRoute>} />
         <Route path="/admin/delivery" element={<ProtectedRoute adminOnly><AdminDelivery /></ProtectedRoute>} />
