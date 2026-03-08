@@ -14,13 +14,17 @@ export default function AdminDashboard() {
     const activeSubCount = activeSubs.length
 
     // Calculate tomorrow's generic requirement based on active subscriptions
+    // Data shape: sub.items[] → each item has item.products.name, item.products.size_label, item.quantity
     const tomorrowMilkReq = {}
     activeSubs.forEach(sub => {
-        const item = sub.products?.name + ' ' + sub.products?.size_label
-        tomorrowMilkReq[item] = (tomorrowMilkReq[item] || 0) + sub.quantity
+        ; (sub.items || []).forEach(item => {
+            const label = `${item.products?.name || 'Unknown'} ${item.products?.size_label || ''}`.trim()
+            tomorrowMilkReq[label] = (tomorrowMilkReq[label] || 0) + (item.quantity || 0)
+        })
     })
 
     const totalPackets = Object.values(tomorrowMilkReq).reduce((s, v) => s + v, 0)
+
 
     // Revenue from confirmed/delivered orders today
     const todayRevenue = (orders || []).reduce((s, o) => s + o.total_amount, 0)

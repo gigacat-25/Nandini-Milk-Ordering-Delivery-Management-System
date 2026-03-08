@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle } from 'lucide-react'
-import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession } from '../../lib/useData'
+import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw } from 'lucide-react'
+import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
@@ -140,6 +140,27 @@ export default function AdminDelivery() {
         } catch (err) {
             console.error(err)
             toast.error('Failed to mark delivered: ' + err.message)
+        } finally {
+            setUpdatingId(null)
+        }
+    }
+
+    async function handleUndoDelivery(d) {
+        if (!confirm('Are you sure you want to undo this delivery? Any deducted funds will be refunded.')) return
+
+        setUpdatingId(d.id)
+        try {
+            if (d.type === 'order') {
+                await unmarkOrderDelivered(d.id)
+                await refetchOrders()
+            } else {
+                await unmarkSubscriptionDelivered(d.customerId, d.id, date, d.amount)
+                await refetchComp()
+            }
+            toast.success('Delivery reverted successfully')
+        } catch (err) {
+            console.error(err)
+            toast.error('Failed to undo delivery: ' + err.message)
         } finally {
             setUpdatingId(null)
         }
@@ -304,7 +325,17 @@ export default function AdminDelivery() {
                             <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>{formatCurrency(d.amount)}</div>
 
                             {d.status === 'delivered' ? (
-                                <span className="badge-success" style={{ flexShrink: 0 }}>✓ Delivered</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                                    <span className="badge-success">✓ Delivered</span>
+                                    <button
+                                        onClick={() => handleUndoDelivery(d)}
+                                        disabled={updatingId === d.id}
+                                        style={{ background: 'transparent', border: '1px solid #cbd5e1', padding: '0.3rem 0.6rem', borderRadius: 6, color: '#64748b', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                                        title="Undo Delivery"
+                                    >
+                                        {updatingId === d.id ? <Loader2 size={12} className="spin" /> : <RotateCcw size={12} />} Undo
+                                    </button>
+                                </div>
                             ) : d.status === 'insufficient_funds' ? (
                                 <span style={{ color: '#dc2626', background: '#fee2e2', padding: '0.25rem 0.75rem', borderRadius: 9999, fontSize: '0.75rem', fontWeight: 600, flexShrink: 0 }}>
                                     No Funds (₹{d.amount})

@@ -241,6 +241,55 @@ export async function markSubscriptionDelivered(customerId, subscriptionId, date
     return true
 }
 
+export async function unmarkOrderDelivered(orderId) {
+    const { error } = await supabase
+        .from('orders')
+        .update({ status: 'confirmed' })
+        .eq('id', orderId)
+
+    if (error) throw error
+    return true
+}
+
+export async function unmarkSubscriptionDelivered(customerId, subscriptionId, dateStr, amount) {
+    // 1. Delete the delivery record
+    const { error: delErr } = await supabase
+        .from('deliveries')
+        .delete()
+        .eq('subscription_id', subscriptionId)
+        .eq('delivery_date', dateStr)
+
+    if (delErr) throw delErr
+
+    // 2. Refund wallet if there was a charge
+    if (amount > 0) {
+        const { data: user, error: userErr } = await supabase
+            .from('users')
+            .select('wallet_balance')
+            .eq('id', customerId)
+            .single()
+        if (userErr) throw userErr
+
+        const newBalance = (Number(user.wallet_balance) || 0) + Number(amount)
+        const { error: updateErr } = await supabase
+            .from('users')
+            .update({ wallet_balance: newBalance })
+            .eq('id', customerId)
+        if (updateErr) throw updateErr
+
+        const { error: txnErr } = await supabase
+            .from('wallet_transactions')
+            .insert([{
+                customer_id: customerId,
+                amount: Number(amount),
+                description: `Refund: Delivery reverted for ${dateStr} (Admin)`
+            }])
+        if (txnErr) throw txnErr
+    }
+
+    return true
+}
+
 export async function addWalletFunds(customerId, amount) {
     // 1. Get current balance
     const { data: user, error: userErr } = await supabase
