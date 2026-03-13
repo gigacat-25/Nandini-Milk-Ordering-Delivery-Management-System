@@ -1,0 +1,20 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.wrangler/
+
+# Logs
+*.log
+output.txt
+
+# OS files
+.DS_Store
+Thumbs.db
