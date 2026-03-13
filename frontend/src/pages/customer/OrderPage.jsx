@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar, Navigation, MessageSquare } from 'lucide-react'
 import { useCartStore } from '../../store'
 import { formatCurrency } from '../../lib/utils'
@@ -16,8 +16,12 @@ export default function OrderPage() {
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
     const [address, setAddress] = useState('')
     const [mapsUrl, setMapsUrl] = useState('')
+    const location = useLocation()
+    const queryParams = new URLSearchParams(location.search)
+    const orderTypeUrl = queryParams.get('type') || 'one-time'
+    
     const [instructions, setInstructions] = useState('')
-    const [orderType, setOrderType] = useState('one-time')
+    const [orderType, setOrderType] = useState(orderTypeUrl)
     const [frequency, setFrequency] = useState('daily')
     const [deliverySlot, setDeliverySlot] = useState('morning')
     const [payLoading, setPayLoading] = useState(false)
@@ -175,7 +179,7 @@ export default function OrderPage() {
             <Navbar />
             <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem' }}>
                 <div className="page-header">
-                    <h1 className="page-title">Place Order</h1>
+                    <h1 className="page-title">{orderType === 'subscription' ? 'Set Up Subscription' : 'Place One-Time Order'}</h1>
                 </div>
 
                 {/* Progress Steps */}
@@ -212,19 +216,12 @@ export default function OrderPage() {
                                     </div>
                                 </div>
                                 <div className="card">
-                                    <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem' }}>Order Type</h2>
-                                    <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
-                                        <button className={orderType === 'one-time' ? 'btn-primary' : 'btn-secondary'} onClick={() => setOrderType('one-time')} style={{ justifyContent: 'center' }}>One-Time Order</button>
-                                        <button className={orderType === 'subscription' ? 'btn-primary' : 'btn-secondary'} onClick={() => setOrderType('subscription')} style={{ justifyContent: 'center' }}>Subscribe</button>
-                                    </div>
-                                </div>
-                                <div className="card">
-                                    <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Your Cart</h2>
+                                    <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Your Selected Items</h2>
                                     {items.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
                                             <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🛒</div>
-                                            <div style={{ fontWeight: 600 }}>Your cart is empty</div>
-                                            <button className="btn-primary" onClick={() => navigate('/products')} style={{ marginTop: '1rem' }}>Browse Products</button>
+                                            <div style={{ fontWeight: 600 }}>No items selected</div>
+                                            <button className="btn-primary" onClick={() => navigate(`/products?type=${orderType}`)} style={{ marginTop: '1rem' }}>Browse Products</button>
                                         </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

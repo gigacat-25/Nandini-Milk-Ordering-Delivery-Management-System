@@ -60,7 +60,7 @@ export default function SubscriptionsPage() {
                         <h1 className="page-title">My Subscriptions</h1>
                         <p className="page-subtitle">Manage your daily recurring milk orders.</p>
                     </div>
-                    <button className="btn-primary" onClick={() => navigate('/products')}>
+                    <button className="btn-primary" onClick={() => navigate('/products?type=subscription')}>
                         <Plus size={16} /> New Subscription
                     </button>
                 </div>
@@ -85,7 +85,7 @@ export default function SubscriptionsPage() {
                         <RefreshCw size={40} color="#94a3b8" style={{ marginBottom: '0.75rem' }} />
                         <div style={{ fontWeight: 700, color: '#374151', marginBottom: '0.5rem' }}>No subscriptions yet</div>
                         <div style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.25rem' }}>Set up a daily milk subscription and never run out.</div>
-                        <button className="btn-primary" onClick={() => navigate('/products')}><Plus size={16} /> Create Subscription</button>
+                        <button className="btn-primary" onClick={() => navigate('/products?type=subscription')}><Plus size={16} /> Create Subscription</button>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

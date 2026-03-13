@@ -1,15 +1,32 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/milk.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Nandini Milk Ordering & Delivery Management System — Fresh dairy products delivered daily in Vaderhalli, Bengaluru." />
-    <meta name="keywords" content="Nandini milk, dairy delivery, Vaderhalli, Bengaluru, milk subscription" />
-    <title>Nandini Milk — Vaderhalli Store</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/milk_icon_512.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description"
+    content="Nandini Milk Ordering & Delivery Management System — Fresh dairy products delivered daily in Vaderhalli, Bengaluru." />
+  <meta name="keywords" content="Nandini milk, dairy delivery, Vaderhalli, Bengaluru, milk subscription" />
+  <title>Nandini Milk — Vaderhalli Store</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('ServiceWorker registered with scope:', registration.scope))
+          .catch(error => console.error('ServiceWorker registration failed:', error));
+      });
+    }
+  </script>
+</body>
+
 </html>

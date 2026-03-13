@@ -1,0 +1,11 @@
+﻿commit 7732d85bc4bec35015675d20f5102bb22e46e804
+Author: gigacat-25 <pabt2005@gmail.com>
+Date:   Mon Mar 9 01:00:18 2026 +0530
+
+    updated readme file
+
+commit 5bae98eab5313f260b0349bdbf5e4897627aa966
+Author: gigacat-25 <pabt2005@gmail.com>
+Date:   Mon Mar 9 00:16:02 2026 +0530
+
+    almost ready app

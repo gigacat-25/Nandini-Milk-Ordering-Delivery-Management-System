@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
-import { Save, MapPin, Navigation, Info } from 'lucide-react'
+import { Save, MapPin, Navigation, Info, Download, Smartphone } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { supabase } from '../../lib/supabase'
 import { renewAppAccess, useUserProfile } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate } from '../../lib/utils'
+import { usePWAStore } from '../../store'
 export default function ProfilePage() {
     const { user, isLoaded } = useUser()
     const { data: userProfile, refetch: refetchProfile } = useUserProfile(user?.id)
+
+    const { deferredPrompt, clearPrompt } = usePWAStore()
 
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
@@ -95,6 +98,16 @@ export default function ProfilePage() {
         }
     }
 
+    async function handleInstall() {
+        if (!deferredPrompt) return
+        deferredPrompt.prompt()
+        const { outcome } = await deferredPrompt.userChoice
+        if (outcome === 'accepted') {
+            toast.success('Thank you for installing the app!')
+        }
+        clearPrompt()
+    }
+
     if (!isLoaded || loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading profile...</div>
 
     const expiry = userProfile?.app_fee_expiry ? new Date(userProfile.app_fee_expiry) : null
@@ -112,6 +125,29 @@ export default function ProfilePage() {
                         Help us find your location easily for daily morning deliveries.
                     </p>
                 </div>
+
+                {/* App Installation Section */}
+                {deferredPrompt && (
+                    <div className="card" style={{ marginBottom: '2rem', background: '#eff6ff', borderColor: '#bfdbfe' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{
+                                width: 48, height: 48, borderRadius: 12, background: 'var(--color-primary)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
+                            }}>
+                                <Smartphone size={24} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#1e40af', margin: '0 0 0.25rem' }}>Install Nandini App</h2>
+                                <p style={{ fontSize: '0.875rem', color: '#3b82f6', margin: 0 }}>
+                                    Install our app for a faster ordering experience.
+                                </p>
+                            </div>
+                            <button onClick={handleInstall} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Download size={16} /> Install Now
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Subscriptions Section */}
                 <div className="card" style={{ marginBottom: '2rem' }}>

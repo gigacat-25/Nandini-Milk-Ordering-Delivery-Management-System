@@ -34,14 +34,22 @@ export default function DeliveryDashboard() {
 
             const subCreated = new Date(s.created_at)
             const targetDate = new Date(date)
-            let cutoffTime = new Date(targetDate)
 
+            // Find the most restrictive cutoff among all items in this subscription
+            let minCutoff = s.delivery_slot === 'morning' ? 15.5 : 19.5
+            if (s.items?.length > 0) {
+                const cutoffs = s.items.map(i => s.delivery_slot === 'morning' ? (i.products?.cutoff_morning || 15.5) : (i.products?.cutoff_evening || 19.5))
+                minCutoff = Math.min(...cutoffs)
+            }
+
+            let cutoffTime = new Date(targetDate)
             if (s.delivery_slot === 'morning') {
                 cutoffTime.setDate(cutoffTime.getDate() - 1)
-                cutoffTime.setHours(15, 30, 0, 0)
-            } else {
-                cutoffTime.setHours(7, 30, 0, 0)
             }
+
+            const hours = Math.floor(minCutoff)
+            const mins = (minCutoff % 1) * 60
+            cutoffTime.setHours(hours, mins, 0, 0)
 
             if (subCreated >= cutoffTime) return false
             if (s.delivery_slot !== activeSlot) return false

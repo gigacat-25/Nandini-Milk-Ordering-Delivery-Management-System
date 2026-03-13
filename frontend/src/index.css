@@ -4,9 +4,9 @@
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
-  --color-primary: #2563eb;
-  --color-primary-light: #3b82f6;
-  --color-primary-dark: #1d4ed8;
+  --color-primary: #5e72e4;
+  --color-primary-light: #7c8def;
+  --color-primary-dark: #3b50df;
   --color-surface: #f8fafc;
   --color-border: #e2e8f0;
 }

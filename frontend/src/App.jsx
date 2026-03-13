@@ -27,6 +27,8 @@ import DeliveryDashboard from './pages/delivery/DeliveryDashboard'
 // Route Guards
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute'
 import AppAccessGuard from './components/AppAccessGuard'
+import InstallPWA from './components/InstallPWA'
+import CustomerLayout from './components/CustomerLayout'
 
 export default function App() {
   return (
@@ -39,19 +41,29 @@ export default function App() {
           error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
+      <InstallPWA />
+      <style>{`
+        @keyframes slide-up {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
       <Routes>
         {/* Public */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
-        <Route path="/products" element={<ProductsPage />} />
+        <Route path="/products" element={<CustomerLayout><ProductsPage /></CustomerLayout>} />
 
         {/* Customer Routes */}
-        <Route path="/dashboard" element={<ProtectedRoute><CustomerDashboard /></ProtectedRoute>} />
-        <Route path="/order" element={<ProtectedRoute><OrderPage /></ProtectedRoute>} />
-        <Route path="/subscriptions" element={<ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
-        <Route path="/previous-orders" element={<ProtectedRoute><PreviousOrdersPage /></ProtectedRoute>} />
-        <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><CustomerLayout><CustomerDashboard /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/indents" element={<ProtectedRoute><CustomerLayout><OrderPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/order" element={<ProtectedRoute><CustomerLayout><OrderPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/subscriptions" element={<ProtectedRoute><CustomerLayout><SubscriptionsPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><CustomerLayout><PreviousOrdersPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/previous-orders" element={<ProtectedRoute><CustomerLayout><PreviousOrdersPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/payment" element={<ProtectedRoute><CustomerLayout><WalletPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/wallet" element={<ProtectedRoute><CustomerLayout><WalletPage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><CustomerLayout><ProfilePage /></CustomerLayout></ProtectedRoute>} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />

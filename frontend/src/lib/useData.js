@@ -329,6 +329,29 @@ export function useDeliveryPhotos(dateStr) {
     }, [dateStr])
 }
 
+// --- Product Photos ---
+export async function uploadProductPhoto(file, productId) {
+    const ext = (file.name || 'product.jpg').split('.').pop() || 'jpg'
+    const fileName = `${productId}-${Date.now()}.${ext}`
+    const path = `products/${fileName}`
+
+    const { error: uploadErr } = await supabase.storage
+        .from('product-photos')
+        .upload(path, file, { upsert: true, contentType: file.type })
+
+    if (uploadErr) {
+        // Fallback: bucket might not exist, but we can't create it via API easily.
+        // We assume the user has set up the 'product-photos' bucket as per instructions.
+        throw uploadErr
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('product-photos')
+        .getPublicUrl(path)
+
+    return publicUrl
+}
+
 export async function unmarkSubscriptionDelivered(customerId, subscriptionId, dateStr, amount) {
     // 1. Delete the delivery record
     const { error: delErr } = await supabase

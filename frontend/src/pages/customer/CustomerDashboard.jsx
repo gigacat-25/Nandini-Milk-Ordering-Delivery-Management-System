@@ -129,9 +129,9 @@ export default function CustomerDashboard() {
                 {/* Quick Actions */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
                     {[
-                        { to: '/products', icon: ShoppingBag, label: 'Order Now', desc: 'One-time order', color: '#2563eb', bg: '#dbeafe' },
-                        { to: '/subscriptions', icon: RefreshCw, label: 'Subscriptions', desc: 'Manage daily orders', color: '#059669', bg: '#d1fae5' },
-                        { to: '/billing', icon: IndianRupee, label: 'Billing', desc: 'View payment history', color: '#7c3aed', bg: '#ede9fe' },
+                        { to: '/products?type=one-time', icon: ShoppingBag, label: 'Order for Tomorrow', desc: 'One-time delivery', color: '#2563eb', bg: '#dbeafe' },
+                        { to: '/products?type=subscription', icon: RefreshCw, label: 'Start Daily Milk', desc: 'Set up recurring orders', color: '#059669', bg: '#d1fae5' },
+                        { to: '/wallet', icon: IndianRupee, label: 'My Balance', desc: 'View payment history', color: '#7c3aed', bg: '#ede9fe' },
                     ].map((action) => (
                         <Link key={action.to} to={action.to} style={{ textDecoration: 'none' }}>
                             <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', transition: 'all 0.15s' }}

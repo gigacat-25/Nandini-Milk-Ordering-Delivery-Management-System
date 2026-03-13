@@ -54,16 +54,22 @@ export default function AdminDelivery() {
             // Enforce cutoff: don't show subscriptions created after the cutoff for this target date
             const subCreated = new Date(s.created_at)
             const targetDate = new Date(date)
-            let cutoffTime = new Date(targetDate)
 
-            if (s.delivery_slot === 'morning') {
-                // Morning cutoff is 3:30 PM the day before
-                cutoffTime.setDate(cutoffTime.getDate() - 1)
-                cutoffTime.setHours(15, 30, 0, 0)
-            } else {
-                // Evening cutoff is 7:30 AM the same day
-                cutoffTime.setHours(7, 30, 0, 0)
+            // Find the most restrictive cutoff among all items in this subscription
+            let minCutoff = s.delivery_slot === 'morning' ? 15.5 : 19.5
+            if (s.items?.length > 0) {
+                const cutoffs = s.items.map(i => s.delivery_slot === 'morning' ? (i.products?.cutoff_morning || 15.5) : (i.products?.cutoff_evening || 19.5))
+                minCutoff = Math.min(...cutoffs)
             }
+
+            let cutoffTime = new Date(targetDate)
+            if (s.delivery_slot === 'morning') {
+                cutoffTime.setDate(cutoffTime.getDate() - 1)
+            }
+
+            const hours = Math.floor(minCutoff)
+            const mins = (minCutoff % 1) * 60
+            cutoffTime.setHours(hours, mins, 0, 0)
 
             if (subCreated >= cutoffTime) return false
 

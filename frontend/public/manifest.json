@@ -1,0 +1,17 @@
+{
+    "name": "Nandini Milk Management",
+    "short_name": "Nandini Milk",
+    "description": "Premium milk ordering and delivery management system for Nandini Milk Store, Vaderhalli, Bengaluru.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#2563eb",
+    "icons": [
+        {
+            "src": "/milk_icon_512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

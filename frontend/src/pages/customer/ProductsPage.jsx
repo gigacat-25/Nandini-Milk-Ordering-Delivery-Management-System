@@ -5,7 +5,7 @@ import ProductCard from '../../components/ProductCard'
 import Navbar from '../../components/Navbar'
 import { useCartStore } from '../../store'
 import { formatCurrency } from '../../lib/utils'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 const CATEGORIES = ['All', 'Milk', 'Curd', 'Milk Products']
 
@@ -16,6 +16,9 @@ export default function ProductsPage() {
     const cartTotal = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
     const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0)
     const navigate = useNavigate()
+    const location = useLocation()
+    const queryParams = new URLSearchParams(location.search)
+    const orderType = queryParams.get('type') || 'one-time'
 
     const { data: allProducts, loading, error } = useProducts()
 
@@ -33,9 +36,44 @@ export default function ProductsPage() {
             <Navbar />
             <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem 8rem 1.5rem' }}>
                 <div className="page-header">
-                    <h1 className="page-title">Our Products</h1>
-                    <p className="page-subtitle">Fresh Nandini dairy products delivered daily.</p>
+                    <h1 className="page-title">{orderType === 'subscription' ? 'Select Daily Items' : 'Order For Tomorrow'}</h1>
+                    <p className="page-subtitle">{orderType === 'subscription' ? 'Choose products for your daily delivery.' : 'Fresh Nandini dairy products delivered to your door.'}</p>
                 </div>
+
+                {/* Booking Status Banner */}
+                {(() => {
+                    const now = new Date()
+                    const hour = now.getHours() + now.getMinutes() / 60
+                    const isPastMorning = hour >= 15.5
+                    const isPastEvening = hour >= 19.5
+
+                    if (!isPastMorning && !isPastEvening) return null
+
+                    return (
+                        <div style={{
+                            marginBottom: '1.5rem',
+                            padding: '0.875rem 1.25rem',
+                            background: isPastEvening ? '#f1f5f9' : '#fffbeb',
+                            border: `1px solid ${isPastEvening ? '#e2e8f0' : '#fde68a'}`,
+                            borderRadius: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            fontSize: '0.875rem',
+                            color: isPastEvening ? '#475569' : '#92400e',
+                            fontWeight: 500
+                        }}>
+                            <span style={{ fontSize: '1.25rem' }}>⏰</span>
+                            <div>
+                                {isPastEvening ? (
+                                    <span>Today's booking is now <strong>closed</strong>. Orders placed now will be scheduled for tomorrow evening or the day after.</span>
+                                ) : (
+                                    <span>Tomorrow morning booking is now <strong>closed</strong> (passed 3:30 PM). You can still order for today evening!</span>
+                                )}
+                            </div>
+                        </div>
+                    )
+                })()}
 
                 <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: '1 1 260px' }}>
@@ -96,7 +134,7 @@ export default function ProductsPage() {
 
             {cartCount > 0 && (
                 <div style={{
-                    position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)',
+                    position: 'fixed', bottom: '85px', left: '50%', transform: 'translateX(-50%)',
                     background: '#0f172a', color: 'white', padding: '1rem 1.5rem',
                     borderRadius: 14, boxShadow: '0 8px 32px rgb(0 0 0 / 0.25)',
                     display: 'flex', alignItems: 'center', gap: '1.5rem',
@@ -107,7 +145,7 @@ export default function ProductsPage() {
                         <span style={{ color: '#94a3b8', fontSize: '0.875rem', marginLeft: '0.5rem' }}>in cart</span>
                     </div>
                     <div style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#60a5fa' }}>{formatCurrency(cartTotal)}</div>
-                    <button className="btn-primary" onClick={() => navigate('/order')} style={{ marginLeft: 'auto', fontSize: '0.875rem' }}>
+                    <button className="btn-primary" onClick={() => navigate(`/order?type=${orderType}`)} style={{ marginLeft: 'auto', fontSize: '0.875rem' }}>
                         Checkout →
                     </button>
                 </div>

@@ -25,3 +25,10 @@ export const useCartStore = create((set, get) => ({
         return get().items.reduce((sum, item) => sum + item.price * item.quantity, 0)
     },
 }))
+
+// PWA Store
+export const usePWAStore = create((set) => ({
+    deferredPrompt: null,
+    setDeferredPrompt: (prompt) => set({ deferredPrompt: prompt }),
+    clearPrompt: () => set({ deferredPrompt: null }),
+}))
