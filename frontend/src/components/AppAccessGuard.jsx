@@ -1,53 +1,24 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle, Lock, ShieldCheck, CreditCard } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
-import { supabase } from '../lib/supabase'
-import { renewAppAccess } from '../lib/useData'
+import { renewAppAccess, useUserProfile } from '../lib/useData'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
 export default function AppAccessGuard({ children }) {
     const { user, isLoaded } = useUser()
-    const [accessData, setAccessData] = useState(null)
-    const [loading, setLoading] = useState(true)
+    const { data: userProfile, loading: profileLoading, refetch: refetchProfile } = useUserProfile(user?.id)
     const [paying, setPaying] = useState(false)
-
-    const fetchAccess = async () => {
-        if (!user) return
-        try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('app_fee_expiry')
-                .eq('id', user.id)
-                .single()
-
-            if (error && error.code !== 'PGRST116') throw error
-            setAccessData(data || {})
-        } catch (err) {
-            console.error('Failed to check app access', err)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        if (isLoaded && user) {
-            fetchAccess()
-        } else if (isLoaded) {
-            setLoading(false)
-        }
-    }, [isLoaded, user])
 
     async function handlePayment() {
         if (!user) return
         setPaying(true)
         try {
-            // Simulate payment delay
             await new Promise(r => setTimeout(r, 1500))
             await renewAppAccess(user.id)
             toast.success('App subscription renewed! Thank you.')
-            await fetchAccess() // Refresh local state
-            window.location.reload() // Force a hard refresh to re-mount dashboard
+            refetchProfile()
+            // We don't necessarily need a hard reload if state updates correctly
         } catch (err) {
             toast.error('Failed to process payment. Please try again.')
         } finally {
@@ -55,7 +26,7 @@ export default function AppAccessGuard({ children }) {
         }
     }
 
-    if (!isLoaded || loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#64748b' }}>Checking access...</div>
+    if (!isLoaded || (user && profileLoading)) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#64748b' }}>Checking access...</div>
 
     // If clerk user doesn't exist here for some reason, let the ProtectedRoute handle the redirect.
     if (!user) return children
@@ -65,7 +36,7 @@ export default function AppAccessGuard({ children }) {
     if (isAdmin) return children
 
     const now = new Date()
-    const expiry = accessData?.app_fee_expiry ? new Date(accessData.app_fee_expiry) : null
+    const expiry = userProfile?.app_fee_expiry ? new Date(userProfile.app_fee_expiry) : null
 
     // Status states
     const isExpired = !expiry || expiry < now

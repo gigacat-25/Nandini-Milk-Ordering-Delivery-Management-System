@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X } from 'lucide-react'
+import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock } from 'lucide-react'
 import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos } from '../../lib/useData'
-import { supabase } from '../../lib/supabase'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
@@ -11,7 +10,7 @@ export default function AdminDelivery() {
     const { user } = useUser()
     const { data: subscriptions, loading: subsLoading } = useSubscriptions()
     const { data: customers, loading: custLoading } = useCustomers()
-    const [date, setDate] = useState(newtoISOStringDate())
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0])
     const [activeSlot, setActiveSlot] = useState('morning')
     const { data: pauses, loading: pausesLoading } = useSubscriptionPauses(date)
     const { data: orders, loading: ordersLoading, refetch: refetchOrders } = useOrdersByDate(date)
@@ -25,19 +24,17 @@ export default function AdminDelivery() {
     const [photoLightbox, setPhotoLightbox] = useState(null) // photo URL string
     const { data: deliveryPhotos, refetch: refetchPhotos } = useDeliveryPhotos(date)
 
-    // Real-time Updates: Listen for changes in orders, deliveries, and photos
+    // Poll for updates every 10 seconds to keep the admin view in sync with drivers
     useEffect(() => {
-        const channel = supabase
-            .channel('admin-delivery-realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => refetchOrders())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => refetchComp())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_photos' }, () => refetchPhotos())
-            .subscribe()
+        const interval = setInterval(() => {
+           refetchOrders()
+           refetchComp()
+           refetchPhotos()
+           refetchSkips()
+        }, 10000)
+        return () => clearInterval(interval)
+    }, [refetchOrders, refetchComp, refetchPhotos, refetchSkips])
 
-        return () => {
-            supabase.removeChannel(channel)
-        }
-    }, [refetchOrders, refetchComp, refetchPhotos])
 
     function newtoISOStringDate() {
         return new Date().toISOString().split('T')[0];
@@ -79,10 +76,21 @@ export default function AdminDelivery() {
             const customer = customers.find(c => c.id === sub.customer_id)
             const isDelivered = completedDeliveries.some(d => d.subscription_id === sub.id)
 
-            const subItems = sub.items?.map(i => ({
+            const subItemsRaw = sub.items?.map(i => ({
                 ...i,
                 isSkipped: partialSkips?.some(ps => ps.target_id === sub.id && ps.product_id === i.product_id)
             })) || []
+
+            // Group items to avoid duplicates
+            const subItems = Object.values(subItemsRaw.reduce((acc, item) => {
+                const pid = item.product_id
+                if (!acc[pid]) {
+                    acc[pid] = { ...item }
+                } else {
+                    acc[pid].quantity += item.quantity
+                }
+                return acc
+            }, {}))
 
             const activeItems = subItems.filter(i => !i.isSkipped)
             const subAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
@@ -110,11 +118,21 @@ export default function AdminDelivery() {
 
         // 2. Process One-Off Orders
         const orderDeliveries = orders.map(order => {
-            const customer = order.users
-            const orderItems = order.items?.map(i => ({
+            const orderItemsRaw = order.items?.map(i => ({
                 ...i,
                 isSkipped: partialSkips?.some(ps => ps.target_id === order.id && ps.product_id === i.product_id)
             })) || []
+
+            // Group items to avoid duplicates
+            const orderItems = Object.values(orderItemsRaw.reduce((acc, item) => {
+                const pid = item.product_id
+                if (!acc[pid]) {
+                    acc[pid] = { ...item }
+                } else {
+                    acc[pid].quantity += item.quantity
+                }
+                return acc
+            }, {}))
 
             const activeItems = orderItems.filter(i => !i.isSkipped)
             const amount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
@@ -126,11 +144,11 @@ export default function AdminDelivery() {
                 id: order.id,
                 type: 'order',
                 customerId: order.customer_id,
-                customer: customer?.full_name || 'Unknown',
-                address: customer?.address || 'Address not provided',
-                phone: customer?.phone || 'N/A',
-                google_maps: customer?.google_maps_url,
-                instructions: customer?.delivery_instructions,
+                customer: order.customer_name || 'Unknown',
+                address: order.customer_address || 'Address not provided',
+                phone: order.customer_phone || 'N/A',
+                google_maps: order.google_maps_url,
+                instructions: order.delivery_instructions,
                 rawItems: orderItems,
                 slot: order.delivery_slot,
                 amount: amount,
@@ -171,7 +189,7 @@ export default function AdminDelivery() {
         setUpdatingId(d.id)
         try {
             if (d.type === 'order') {
-                await markOrderDelivered(d.id)
+                await markOrderDelivered(d.id, d.customerId, d.amount, date)
                 await refetchOrders()
             } else {
                 await markSubscriptionDelivered(d.customerId, d.id, date, d.amount)
@@ -192,7 +210,7 @@ export default function AdminDelivery() {
         setUpdatingId(d.id)
         try {
             if (d.type === 'order') {
-                await unmarkOrderDelivered(d.id)
+                await unmarkOrderDelivered(d.customerId, d.id, date, d.amount)
                 await refetchOrders()
             } else {
                 await unmarkSubscriptionDelivered(d.customerId, d.id, date, d.amount)
@@ -262,29 +280,38 @@ export default function AdminDelivery() {
         <>
             <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
                 <Navbar />
-                <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
+                <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1rem' }}>
                     {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                         <div>
-                            <h1 className="page-title">Daily Delivery Report</h1>
-                            <p className="page-subtitle">Delivery schedule and route generated from active subscriptions.</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                <h1 className="page-title" style={{ margin: 0, fontSize: '1.5rem' }}>Daily Delivery Report</h1>
+                                <span style={{ 
+                                    display: 'flex', alignItems: 'center', gap: '0.3rem', 
+                                    padding: '0.2rem 0.5rem', background: '#f0fdf4', color: '#166534', 
+                                    borderRadius: 20, fontSize: '0.65rem', fontWeight: 700, border: '1px solid #bbf7d0'
+                                }}>
+                                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }}></span>
+                                    LIVE SYNC
+                                </span>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto' }} />
-                            <button className="btn-primary" onClick={exportCSV}><Download size={16} /> Export CSV</button>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto', padding: '0.5rem 0.75rem', borderRadius: 10, fontSize: '0.85rem' }} />
+                            <button className="btn-primary" onClick={exportCSV} style={{ padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem' }}><Download size={14} /> Export</button>
                         </div>
                     </div>
 
                     {/* Delivery Run Control Panel */}
                     <div style={{
-                        padding: '1.25rem 1.5rem',
+                        padding: '0.75rem 1rem',
                         background: isSessionActive ? '#f0fdf4' : '#fff7ed',
-                        border: `2px solid ${isSessionActive ? '#86efac' : '#fed7aa'}`,
+                        border: `1px solid ${isSessionActive ? '#bbf7d0' : '#fed7aa'}`,
                         borderRadius: 12,
-                        marginBottom: '1.5rem',
+                        marginBottom: '1rem',
                         display: 'flex',
                         flexWrap: 'wrap',
-                        gap: '1rem',
+                        gap: '0.75rem',
                         alignItems: 'center',
                         justifyContent: 'space-between'
                     }}>
@@ -334,17 +361,24 @@ export default function AdminDelivery() {
                         </div>
                     </div>
 
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    {/* Stats Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                         {[
-                            { label: 'Total Deliveries', value: activeDeliveries.length, color: '#2563eb' },
-                            { label: 'Pending', value: pending, color: '#f59e0b' },
-                            { label: 'Delivered', value: delivered, color: '#059669' },
-                            { label: 'Total Value', value: formatCurrency(totalAmt), color: '#7c3aed' },
+                            { label: 'Total Schedule', value: activeDeliveries.length, icon: <List className="text-blue-600" size={18} />, bg: '#eff6ff' },
+                            { label: 'Pending Run', value: pending, icon: <Clock className="text-amber-600" size={18} />, bg: '#fff7ed' },
+                            { label: 'Completed', value: delivered, icon: <CheckCircle className="text-emerald-600" size={18} />, bg: '#f0fdf4' },
+                            { label: 'Total Value', value: formatCurrency(totalAmt), icon: <Coins className="text-purple-600" size={18} />, bg: '#faf5ff' },
                         ].map(s => (
-                            <div key={s.label} className="card" style={{ textAlign: 'center', padding: '1rem' }}>
-                                <div style={{ fontSize: '1.375rem', fontWeight: 800, color: s.color }}>{s.value}</div>
-                                <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{s.label}</div>
+                            <div key={s.label} style={{ 
+                                background: 'white', padding: '0.75rem 1rem', borderRadius: 12, 
+                                border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            }}>
+                                <div style={{ padding: '0.5rem', borderRadius: 10, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s.icon}</div>
+                                <div>
+                                    <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>{s.value}</div>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.2rem' }}>{s.label}</div>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -393,44 +427,67 @@ export default function AdminDelivery() {
                                 </div>
 
                                 {/* Items */}
-                                <div style={{ fontSize: '0.8125rem', color: '#374151', minWidth: 200, flex: 1 }}>
-                                    {d.rawItems.map(item => (
-                                        <div key={item.id} style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.25rem 0',
-                                            opacity: item.isSkipped ? 0.6 : 1, gap: '1rem'
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1, minWidth: 250 }}>
+                                    {d.rawItems.map((item, iIdx) => (
+                                        <div key={`${d.id}-${item.product_id}`} style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '0.6rem 0.8rem', background: item.isSkipped ? '#f8fafc' : 'white',
+                                            borderRadius: 10, border: `1px solid ${item.isSkipped ? '#e2e8f0' : '#f1f5f9'}`,
+                                            opacity: item.isSkipped ? 0.6 : 1,
+                                            boxShadow: item.isSkipped ? 'none' : '0 1px 2px 0 rgba(0,0,0,0.05)'
                                         }}>
-                                            <span style={{ textDecoration: item.isSkipped ? 'line-through' : 'none', fontWeight: item.isSkipped ? 400 : 600 }}>
-                                                {item.quantity}x {item.products?.name}
-                                                <span style={{
-                                                    marginLeft: '0.5rem',
-                                                    padding: '0.1rem 0.4rem',
-                                                    background: d.slot === 'morning' ? '#eff6ff' : '#fff7ed',
-                                                    color: d.slot === 'morning' ? '#2563eb' : '#9a3412',
-                                                    borderRadius: 4,
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    border: `1px solid ${d.slot === 'morning' ? '#dbeafe' : '#ffedd5'}`
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <div style={{ 
+                                                    width: '2.4rem', height: '1.8rem', background: item.isSkipped ? '#f1f5f9' : '#eff6ff', 
+                                                    borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontWeight: 800, color: item.isSkipped ? '#94a3b8' : '#2563eb', fontSize: '0.85rem'
                                                 }}>
-                                                    {d.slot}
-                                                </span>
-                                            </span>
+                                                    {item.quantity}x
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontWeight: 700, color: item.isSkipped ? '#94a3b8' : '#1e293b', fontSize: '0.875rem' }}>
+                                                        {item.products?.name}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500 }}>
+                                                        {item.products?.size_label} • {d.slot.toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            </div>
+
                                             {d.status !== 'delivered' && (
                                                 <button
                                                     onClick={() => handleToggleSkip(d, item.product_id, item.isSkipped)}
                                                     disabled={updatingId === `${d.id}-${item.product_id}`}
                                                     style={{
-                                                        background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem',
-                                                        color: item.isSkipped ? '#0f172a' : '#ef4444', fontSize: '0.75rem', fontWeight: 600, padding: '0.25rem 0.5rem', borderRadius: 4
+                                                        background: item.isSkipped ? '#f8fafc' : 'white', 
+                                                        border: `1px solid ${item.isSkipped ? '#cbd5e1' : '#fee2e2'}`, 
+                                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem',
+                                                        color: item.isSkipped ? '#475569' : '#ef4444', 
+                                                        fontSize: '0.75rem', fontWeight: 700, padding: '0.4rem 0.6rem', borderRadius: 8,
+                                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                                                     }}
-                                                    className="hover-bg-slate-100"
+                                                    className="hover:scale-105 active:scale-95"
                                                 >
-                                                    {updatingId === `${d.id}-${item.product_id}` ? <Loader2 size={12} className="spin" /> : item.isSkipped ? <><Undo2 size={12} /> Restore</> : <><XCircle size={12} /> Cancel Item</>}
+                                                    {updatingId === `${d.id}-${item.product_id}` ? (
+                                                        <Loader2 size={14} className="spin" />
+                                                    ) : item.isSkipped ? (
+                                                        <><Undo2 size={14} /> Restore</>
+                                                    ) : (
+                                                        <><XCircle size={14} /> Cancel</>
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
                                     ))}
-                                    {d.rawItems.every(i => i.isSkipped) && <div style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 600, marginTop: '0.25rem' }}>All items cancelled for today.</div>}
+                                    {d.rawItems.every(i => i.isSkipped) && (
+                                        <div style={{ 
+                                            fontSize: '0.8rem', color: '#ef4444', fontWeight: 800, 
+                                            marginTop: '0.25rem', padding: '0.5rem', background: '#fef2f2', 
+                                            borderRadius: 6, textAlign: 'center', border: '1px dashed #fecaca' 
+                                        }}>
+                                            ⚠️ Entire delivery cancelled
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Amount & Status Context */}

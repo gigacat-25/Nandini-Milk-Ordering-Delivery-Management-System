@@ -1,7 +1,8 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { ShoppingCart, Menu, X, Milk, LogIn } from 'lucide-react'
-import { useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { ShoppingCart, Menu, X, Milk, LogIn, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useUser, UserButton, SignedIn, SignedOut } from '@clerk/clerk-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useCartStore } from '../store'
 
 export default function Navbar() {
@@ -9,9 +10,15 @@ export default function Navbar() {
     const cartItems = useCartStore((s) => s.items)
     const location = useLocation()
     const [menuOpen, setMenuOpen] = useState(false)
+    const [scrolled, setScrolled] = useState(false)
+
+    useEffect(() => {
+        const handleScroll = () => setScrolled(window.scrollY > 20)
+        window.addEventListener('scroll', handleScroll)
+        return () => window.removeEventListener('scroll', handleScroll)
+    }, [])
 
     const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0)
-
     const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress === 'thejaswinp6@gmail.com')
 
     const navLinks = isAdmin
@@ -24,143 +31,129 @@ export default function Navbar() {
             { to: '/admin/analytics', label: 'Analytics' },
         ]
         : [
+            { to: '/dashboard', label: 'Home' },
             { to: '/products', label: 'Products' },
             { to: '/subscriptions', label: 'Subscriptions' },
-            { to: '/previous-orders', label: 'Previous Orders' },
             { to: '/wallet', label: 'Wallet' },
-            { to: '/profile', label: 'Settings' },
+            { to: '/profile', label: 'Profile' },
         ]
 
     return (
-        <nav style={{
-            background: 'white',
-            borderBottom: '1px solid #e2e8f0',
-            padding: '0 1.5rem',
-            height: '64px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-            boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)',
-        }}>
-            {/* Logo */}
-            <Link to={isSignedIn ? (isAdmin ? '/admin' : '/dashboard') : '/'} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
-                <div style={{
-                    width: 36, height: 36, background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                    borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                    <Milk size={20} color="white" />
-                </div>
-                <div className="hidden sm:block">
-                    <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>Nandini</div>
-                    <div style={{ fontSize: '0.6875rem', color: '#64748b', lineHeight: 1.1 }}>Vaderhalli Store</div>
-                </div>
-            </Link>
+        <nav className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'glass shadow-lg py-2' : 'bg-white border-b border-slate-100 py-3'}`}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+                {/* Logo */}
+                <Link to={isSignedIn ? (isAdmin ? '/admin' : '/dashboard') : '/'} className="flex items-center gap-2 sm:gap-3 transition-transform hover:scale-105 active:scale-95">
+                    <div className="w-10 h-10 bg-gradient-blue rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <Milk size={22} className="text-white" />
+                    </div>
+                    <div>
+                        <div className="text-base font-black text-slate-900 leading-none">Nandini</div>
+                        <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Vaderhalli Store</div>
+                    </div>
+                </Link>
 
-            {/* Desktop Nav Links */}
-            <SignedIn>
-                <div style={{ display: 'flex', gap: '0.25rem' }} className="desktop-nav">
-                    {navLinks.map((link) => (
-                        <Link
-                            key={link.to}
-                            to={link.to}
-                            style={{
-                                padding: '0.5rem 0.875rem',
-                                borderRadius: '8px',
-                                textDecoration: 'none',
-                                fontSize: '0.875rem',
-                                fontWeight: 500,
-                                color: location.pathname === link.to ? '#2563eb' : '#64748b',
-                                background: location.pathname === link.to ? '#dbeafe' : 'transparent',
-                                transition: 'all 0.15s ease',
-                            }}
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
-                </div>
-            </SignedIn>
-
-            {/* Right side */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <SignedOut>
-                    <Link to="/auth" className="btn-secondary" style={{ textDecoration: 'none', padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <LogIn size={16} /> Login
-                    </Link>
-                    <Link to="/auth?signup=1" className="btn-primary" style={{ textDecoration: 'none', padding: '0.5rem 1rem' }}>
-                        Sign Up
-                    </Link>
-                </SignedOut>
-
+                {/* Desktop Nav Links (Hidden on Mobile for Customers) */}
                 <SignedIn>
-                    {!isAdmin && (
-                        <Link to="/order" style={{ position: 'relative', textDecoration: 'none', color: '#374151' }}>
-                            <div style={{
-                                padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', transition: 'all 0.15s', marginRight: '0.5rem'
-                            }}>
-                                <ShoppingCart size={20} />
-                                {cartCount > 0 && (
-                                    <span style={{
-                                        position: 'absolute', top: -6, right: -6,
-                                        background: '#2563eb', color: 'white', borderRadius: '50%',
-                                        width: 18, height: 18, fontSize: 11, fontWeight: 700,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>{cartCount}</span>
-                                )}
-                            </div>
-                        </Link>
-                    )}
-
-                    {/* Clerk User Button replaces the custom profile dropdown */}
-                    <UserButton afterSignOutUrl="/" />
-
-                    {/* Mobile Menu Button */}
-                    <button
-                        onClick={() => setMenuOpen(!menuOpen)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#374151', display: 'none', marginLeft: '0.5rem' }}
-                        className="mobile-menu-btn"
-                    >
-                        {menuOpen ? <X size={24} /> : <Menu size={24} />}
-                    </button>
+                    <div className={`hidden ${isAdmin ? 'md:flex' : 'lg:flex'} items-center gap-1`}>
+                        {navLinks.map((link) => (
+                            <Link
+                                key={link.to}
+                                to={link.to}
+                                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 nav-link ${
+                                    location.pathname === link.to 
+                                    ? 'text-blue-600 bg-blue-50/50' 
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                }`}
+                            >
+                                {link.label}
+                            </Link>
+                        ))}
+                    </div>
                 </SignedIn>
+
+                {/* Right side */}
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <SignedOut>
+                        <div className="flex items-center gap-2">
+                            <Link to="/auth" className="btn-secondary !px-4 !py-2 !text-[13px] sm:text-sm">
+                                <LogIn size={16} /> Login
+                            </Link>
+                            <Link to="/auth?signup=1" className="hidden sm:inline-flex btn-primary !px-5 !py-2 text-sm">
+                                Join Now
+                            </Link>
+                        </div>
+                    </SignedOut>
+
+                    <SignedIn>
+                        {/* Only show cart icon for admins on desktop OR customers on large desktop */}
+                        {!isAdmin && (
+                            <Link to="/order" className="hidden lg:flex relative p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                                <ShoppingCart size={22} />
+                                {cartCount > 0 && (
+                                    <motion.span 
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
+                                    >
+                                        {cartCount}
+                                    </motion.span>
+                                )}
+                            </Link>
+                        )}
+
+                        <div className="ml-1 border-l border-slate-200 pl-3 h-8 flex items-center">
+                            <UserButton 
+                                appearance={{
+                                    elements: {
+                                        userButtonAvatarBox: 'w-8 h-8 sm:w-9 sm:h-9 border-2 border-white shadow-sm'
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {/* Admin Mobile Menu Button */}
+                        {isAdmin && (
+                            <button
+                                onClick={() => setMenuOpen(!menuOpen)}
+                                className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                            >
+                                {menuOpen ? <X size={24} /> : <Menu size={24} />}
+                            </button>
+                        )}
+                    </SignedIn>
+                </div>
             </div>
 
-            {/* Mobile Menu */}
-            {menuOpen && isSignedIn && (
-                <div style={{
-                    position: 'absolute', top: 64, left: 0, right: 0,
-                    background: 'white', borderBottom: '1px solid #e2e8f0',
-                    padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem',
-                    zIndex: 99,
-                }}>
-                    {navLinks.map((link) => (
-                        <Link
-                            key={link.to}
-                            to={link.to}
-                            onClick={() => setMenuOpen(false)}
-                            style={{
-                                padding: '0.75rem 1rem', borderRadius: '8px',
-                                textDecoration: 'none', fontSize: '0.9375rem', fontWeight: 500,
-                                color: location.pathname === link.to ? '#2563eb' : '#374151',
-                                background: location.pathname === link.to ? '#dbeafe' : 'transparent',
-                            }}
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
-                </div>
-            )}
-
-            <style>{`
-        @media (max-width: 768px) {
-          .desktop-nav { display: none !important; }
-          .mobile-menu-btn { display: flex !important; }
-        }
-      `}</style>
+            {/* Mobile Menu (Only for Admins or special links) */}
+            <AnimatePresence>
+                {menuOpen && isSignedIn && isAdmin && (
+                    <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="md:hidden glass border-t border-slate-100 overflow-hidden"
+                    >
+                        <div className="p-4 space-y-2">
+                            {navLinks.map((link) => (
+                                <Link
+                                    key={link.to}
+                                    to={link.to}
+                                    onClick={() => setMenuOpen(false)}
+                                    className={`flex items-center justify-between p-3 rounded-xl transition-all ${
+                                        location.pathname === link.to 
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+                                        : 'bg-white/50 text-slate-700 hover:bg-white'
+                                    }`}
+                                >
+                                    <span className="font-semibold text-sm">{link.label}</span>
+                                    <ChevronRight size={16} className={location.pathname === link.to ? 'text-white' : 'text-slate-400'} />
+                                </Link>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </nav>
     )
 }
+

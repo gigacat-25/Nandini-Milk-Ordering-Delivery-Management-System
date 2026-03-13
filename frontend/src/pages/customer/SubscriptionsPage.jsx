@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Plus, Pause, Play, Trash2, RefreshCw, Calendar } from 'lucide-react'
-import { useSubscriptions, pauseSubscriptionDate } from '../../lib/useData'
-import { supabase } from '../../lib/supabase'
+import { Plus, Pause, Play, Trash2, RefreshCw, Calendar, Sparkles, ExternalLink, Clock } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useSubscriptions, pauseSubscriptionDate, toggleSubscriptionStatus, deleteSubscription } from '../../lib/useData'
 import { useUser } from '@clerk/clerk-react'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
@@ -19,18 +19,23 @@ export default function SubscriptionsPage() {
 
     async function togglePause(sub) {
         const newStatus = sub.status === 'active' ? 'paused' : 'active'
-        const { error } = await supabase.from('subscriptions').update({ status: newStatus }).eq('id', sub.id)
-        if (error) { toast.error('Failed to update subscription'); return }
-
-        toast.success(newStatus === 'active' ? 'Subscription resumed' : 'Subscription paused')
-        refetch()
+        try {
+            await toggleSubscriptionStatus(sub.id, user.id, newStatus)
+            toast.success(newStatus === 'active' ? 'Subscription resumed' : 'Subscription paused')
+            refetch()
+        } catch (err) {
+            toast.error('Failed to update: ' + err.message)
+        }
     }
 
     async function deleteSub(id) {
-        const { error } = await supabase.from('subscriptions').delete().eq('id', id)
-        if (error) { toast.error('Failed to cancel'); return }
-        toast.success('Subscription cancelled')
-        refetch()
+        try {
+            await deleteSubscription(id)
+            toast.success('Subscription cancelled')
+            refetch()
+        } catch (err) {
+            toast.error('Failed to cancel: ' + err.message)
+        }
     }
 
     async function addPause() {
@@ -46,116 +51,205 @@ export default function SubscriptionsPage() {
         }
     }
 
-    if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading subscriptions...</div>
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    }
+
+    const itemVariants = {
+        hidden: { y: 20, opacity: 0 },
+        visible: { y: 0, opacity: 1 }
+    }
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Loading Schedules...</p>
+                </div>
+            </div>
+        )
+    }
 
     const activeSubs = (subs || []).filter(s => s.status === 'active')
-    const monthlyEst = activeSubs.reduce((sum, s) => sum + (s.products?.price || 0) * s.quantity * 30, 0)
+    const monthlyEst = activeSubs.reduce((sum, s) => {
+        const subTotal = s.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+        return sum + subTotal * 30
+    }, 0)
 
     return (
-        <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+        <div className="min-h-screen bg-[#f8fafc]">
             <Navbar />
-            <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            
+            <motion.main 
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            >
+                {/* Header */}
+                <motion.div variants={itemVariants} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
                     <div>
-                        <h1 className="page-title">My Subscriptions</h1>
-                        <p className="page-subtitle">Manage your daily recurring milk orders.</p>
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Active Schedules</h1>
+                        <p className="text-slate-500 font-medium">Auto-delivery of fresh milk every single morning.</p>
                     </div>
-                    <button className="btn-primary" onClick={() => navigate('/products?type=subscription')}>
-                        <Plus size={16} /> New Subscription
+                    <button 
+                        className="btn-primary !px-6 !py-3.5 shadow-xl shadow-blue-500/10 flex items-center gap-2"
+                        onClick={() => navigate('/products?type=subscription')}
+                    >
+                        <Plus size={20} /> Create New Plan
                     </button>
-                </div>
+                </motion.div>
 
-                {/* Summary */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                {/* Summary Grid */}
+                <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
                     {[
-                        { label: 'Active Subscriptions', value: activeSubs.length, color: '#059669', bg: '#d1fae5' },
-                        { label: 'Paused', value: (subs || []).filter(s => s.status === 'paused').length, color: '#f59e0b', bg: '#fef3c7' },
-                        { label: 'Est. Monthly Cost', value: formatCurrency(monthlyEst), color: '#2563eb', bg: '#dbeafe' },
-                    ].map((s) => (
-                        <div key={s.label} className="stat-card">
-                            <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: '0.25rem' }}>{s.label}</div>
-                            <div style={{ fontSize: '1.375rem', fontWeight: 700, color: s.color }}>{s.value}</div>
+                        { label: 'Active Plans', value: activeSubs.length, icon: Play, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                        { label: 'Paused', value: (subs || []).filter(s => s.status === 'paused').length, icon: Pause, color: 'text-amber-600', bg: 'bg-amber-50' },
+                        { label: 'Monthly Forecast', value: formatCurrency(monthlyEst), icon: Sparkles, color: 'text-blue-600', bg: 'bg-blue-50' },
+                    ].map((stat) => (
+                        <div key={stat.label} className="card p-6 flex items-center gap-4 bg-white border-slate-100 shadow-sm">
+                            <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                                <stat.icon size={24} />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</div>
+                                <div className={`text-xl font-black ${stat.color}`}>{stat.value}</div>
+                            </div>
                         </div>
                     ))}
-                </div>
+                </motion.div>
 
-                {/* Subscriptions List */}
-                {(subs || []).length === 0 ? (
-                    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-                        <RefreshCw size={40} color="#94a3b8" style={{ marginBottom: '0.75rem' }} />
-                        <div style={{ fontWeight: 700, color: '#374151', marginBottom: '0.5rem' }}>No subscriptions yet</div>
-                        <div style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.25rem' }}>Set up a daily milk subscription and never run out.</div>
-                        <button className="btn-primary" onClick={() => navigate('/products?type=subscription')}><Plus size={16} /> Create Subscription</button>
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {subs.map((s) => {
-                            const itemsStr = s.items?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ') || 'No Items'
+                {/* List */}
+                <div className="space-y-6">
+                    {(subs || []).length === 0 ? (
+                        <motion.div variants={itemVariants} className="card py-20 text-center flex flex-col items-center gap-6">
+                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                                <RefreshCw size={40} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-slate-800">You have no active plans</h3>
+                                <p className="text-slate-400 font-medium max-w-sm mx-auto mt-2">
+                                    Subscribe once and we'll deliver fresh milk to your doorstep every morning without you lifting a finger.
+                                </p>
+                            </div>
+                            <button className="btn-secondary !text-blue-600 border-blue-100" onClick={() => navigate('/products?type=subscription')}>
+                                Create first subscription
+                            </button>
+                        </motion.div>
+                    ) : (
+                        subs.map((s) => {
                             const subTotal = s.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+                            const isActive = s.status === 'active'
 
                             return (
-                                <div key={s.id} className="card fade-in" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-                                    <div style={{ width: 48, height: 48, background: s.status === 'active' ? '#d1fae5' : '#fef3c7', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                                        🥛
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1rem' }}>Subscription ({s.items?.length || 0} items)</div>
-                                        <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{itemsStr} · {s.frequency}</div>
-                                        <div style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.2rem' }}>
-                                            Created: <strong>{formatDate(s.created_at)}</strong>
+                                <motion.div 
+                                    key={s.id} 
+                                    variants={itemVariants}
+                                    className={`card overflow-hidden transition-all border-l-8 ${isActive ? 'border-l-emerald-500' : 'border-l-slate-300'}`}
+                                >
+                                    <div className="p-6 md:p-8 flex flex-col md:flex-row md:items-center gap-8">
+                                        {/* Status & Icon */}
+                                        <div className="flex flex-row md:flex-col items-center gap-4">
+                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg shadow-slate-200/50 ${isActive ? 'bg-emerald-50' : 'bg-slate-100'}`}>
+                                                🥛
+                                            </div>
+                                            <span className={`badge-${isActive ? 'success' : 'warning'} !rounded-full !px-4`}>{s.status}</span>
+                                        </div>
+
+                                        {/* Content */}
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none mb-2">
+                                                Morning Delivery Plan
+                                            </h3>
+                                            <div className="flex flex-wrap gap-2 mb-4">
+                                                {s.items?.map((item, idx) => (
+                                                    <span key={idx} className="bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                                                        <span className="w-4 h-4 bg-slate-200 rounded-md flex items-center justify-center text-[10px]">{item.quantity}</span>
+                                                        {item.products?.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <div className="flex items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                                <div className="flex items-center gap-1.5"><Calendar size={14} /> Daily</div>
+                                                <div className="flex items-center gap-1.5"><RefreshCw size={14} /> Created {formatDate(s.created_at)}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex flex-row md:flex-col items-start md:items-end justify-between md:justify-center gap-6 border-t md:border-t-0 border-slate-50 pt-6 md:pt-0">
+                                            <div className="text-right">
+                                                <div className="text-2xl font-black text-slate-900 leading-none mb-1">{formatCurrency(subTotal)}</div>
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Per Delivery</div>
+                                            </div>
+                                            
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => togglePause(s)}
+                                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                                        isActive 
+                                                        ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                                        : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                                    }`}
+                                                    title={isActive ? 'Pause' : 'Resume'}
+                                                >
+                                                    {isActive ? <Pause size={20} /> : <Play size={20} />}
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowPause(s.id)}
+                                                    className="w-10 h-10 bg-slate-50 text-slate-500 rounded-xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition-all"
+                                                    title="Skip a morning"
+                                                >
+                                                    <Calendar size={20} />
+                                                </button>
+                                                <button
+                                                    onClick={() => { if (confirm('Cancel this subscription?')) deleteSub(s.id) }}
+                                                    className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-100 transition-all border border-red-100/50"
+                                                    title="Cancel"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.0625rem' }}>{formatCurrency(subTotal)}<span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>/delivery</span></div>
-                                        <span className={s.status === 'active' ? 'badge-success' : 'badge-warning'}>{s.status}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <button
-                                            onClick={() => togglePause(s)}
-                                            style={{
-                                                padding: '0.5rem 0.875rem', borderRadius: 8, border: '1px solid',
-                                                borderColor: s.status === 'active' ? '#f59e0b' : '#059669',
-                                                background: 'white', color: s.status === 'active' ? '#f59e0b' : '#059669',
-                                                cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600,
-                                                display: 'flex', alignItems: 'center', gap: '0.375rem',
-                                            }}
-                                        >
-                                            {s.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
-                                            {s.status === 'active' ? 'Pause' : 'Resume'}
-                                        </button>
-                                        <button
-                                            onClick={() => setShowPause(s.id)}
-                                            className="btn-secondary"
-                                            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8125rem' }}
-                                            title="Skip a day"
-                                        >
-                                            <Calendar size={13} />
-                                        </button>
-                                        <button
-                                            onClick={() => { if (confirm('Cancel this subscription?')) deleteSub(s.id) }}
-                                            style={{ padding: '0.5rem', borderRadius: 8, border: '1px solid #fee2e2', background: 'white', color: '#ef4444', cursor: 'pointer' }}
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                </div>
+                                </motion.div>
                             )
-                        })}
-                    </div>
-                )}
-            </div>
+                        })
+                    )}
+                </div>
+            </motion.main>
 
             {/* Skip Day Modal */}
-            <Modal isOpen={!!showPause} onClose={() => setShowPause(null)} title="Skip Delivery Day" size="sm">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem' }}>Select a date to skip your delivery:</p>
-                    <input className="input" type="date" value={pauseDate} onChange={e => setPauseDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
-                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                        <button className="btn-secondary" onClick={() => setShowPause(null)}>Cancel</button>
-                        <button className="btn-primary" onClick={addPause}>Skip This Day</button>
+            <Modal isOpen={!!showPause} onClose={() => setShowPause(null)} title="Skip Delivery" size="sm">
+                <div className="space-y-6 pt-2">
+                    <div className="bg-blue-50 rounded-2xl p-4 flex gap-4 border border-blue-100/50">
+                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 flex-shrink-0">
+                            <Clock size={20} />
+                        </div>
+                        <p className="text-[11px] font-semibold text-blue-900/60 leading-relaxed">
+                            Skipping a day will pause your delivery only for that date. Regular deliveries will resume automatically from the next cycle.
+                        </p>
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select skip date</label>
+                        <input 
+                            className="input !py-4 font-black" 
+                            type="date" 
+                            value={pauseDate} 
+                            onChange={e => setPauseDate(e.target.value)} 
+                            min={new Date().toISOString().split('T')[0]} 
+                        />
+                    </div>
+                    
+                    <div className="flex gap-4">
+                        <button className="btn-secondary flex-1 !rounded-xl" onClick={() => setShowPause(null)}>Dismiss</button>
+                        <button className="btn-primary flex-1 !rounded-xl" onClick={addPause}>Confirm Skip</button>
                     </div>
                 </div>
             </Modal>
         </div>
     )
 }
+

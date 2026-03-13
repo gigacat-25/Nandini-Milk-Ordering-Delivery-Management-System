@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, ShoppingBag, Clock, ArrowRight, Filter } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useProducts } from '../../lib/useData'
 import ProductCard from '../../components/ProductCard'
 import Navbar from '../../components/Navbar'
@@ -22,8 +23,28 @@ export default function ProductsPage() {
 
     const { data: allProducts, loading, error } = useProducts()
 
-    if (loading) return <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'grid', placeItems: 'center', color: '#64748b' }}>Loading products...</div>
-    if (error) return <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'grid', placeItems: 'center', color: '#ef4444' }}>Error: {error.message}</div>
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
+    }
+
+    const itemVariants = {
+        hidden: { y: 20, opacity: 0 },
+        visible: { y: 0, opacity: 1 }
+    }
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Fetching Freshness...</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (error) return <div className="min-h-screen grid place-items-center bg-red-50 text-red-600 font-bold p-10">Error loading store: {error.message}</div>
 
     const filtered = (allProducts || []).filter((p) => {
         const matchCat = activeCategory === 'All' || p.category === activeCategory
@@ -32,13 +53,26 @@ export default function ProductsPage() {
     })
 
     return (
-        <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+        <div className="min-h-screen bg-[#f8fafc] pb-40 md:pb-32">
             <Navbar />
-            <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem 8rem 1.5rem' }}>
-                <div className="page-header">
-                    <h1 className="page-title">{orderType === 'subscription' ? 'Select Daily Items' : 'Order For Tomorrow'}</h1>
-                    <p className="page-subtitle">{orderType === 'subscription' ? 'Choose products for your daily delivery.' : 'Fresh Nandini dairy products delivered to your door.'}</p>
-                </div>
+            
+            <motion.main 
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8 md:py-10"
+            >
+                {/* Hero Header */}
+                <motion.div variants={itemVariants} className="mb-8 text-center md:text-left px-2">
+                    <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+                        {orderType === 'subscription' ? 'Dairy Subscriptions' : 'Fresh Daily Store'}
+                    </h1>
+                    <p className="text-slate-500 mt-2 font-medium max-w-2xl text-sm md:text-base">
+                        {orderType === 'subscription' 
+                            ? 'Set up your recurring milk delivery. Edit or pause anytime.' 
+                            : 'Order fresh packets for tomorrow morning. Straight from local dairy.'}
+                    </p>
+                </motion.div>
 
                 {/* Booking Status Banner */}
                 {(() => {
@@ -46,110 +80,127 @@ export default function ProductsPage() {
                     const hour = now.getHours() + now.getMinutes() / 60
                     const isPastMorning = hour >= 15.5
                     const isPastEvening = hour >= 19.5
-
                     if (!isPastMorning && !isPastEvening) return null
 
                     return (
-                        <div style={{
-                            marginBottom: '1.5rem',
-                            padding: '0.875rem 1.25rem',
-                            background: isPastEvening ? '#f1f5f9' : '#fffbeb',
-                            border: `1px solid ${isPastEvening ? '#e2e8f0' : '#fde68a'}`,
-                            borderRadius: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.75rem',
-                            fontSize: '0.875rem',
-                            color: isPastEvening ? '#475569' : '#92400e',
-                            fontWeight: 500
-                        }}>
-                            <span style={{ fontSize: '1.25rem' }}>⏰</span>
-                            <div>
+                        <motion.div 
+                            variants={itemVariants} 
+                            className={`mb-8 p-3 md:p-4 rounded-2xl border flex items-center gap-4 ${
+                                isPastEvening ? 'bg-slate-50 border-slate-100 text-slate-500' : 'bg-amber-50 border-amber-100 text-amber-800'
+                            }`}
+                        >
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                isPastEvening ? 'bg-slate-200' : 'bg-amber-200 animate-pulse'
+                            }`}>
+                                <Clock size={18} />
+                            </div>
+                            <div className="text-[12px] md:text-sm font-semibold">
                                 {isPastEvening ? (
-                                    <span>Today's booking is now <strong>closed</strong>. Orders placed now will be scheduled for tomorrow evening or the day after.</span>
+                                    <span>Today's booking is closed. Scheduled for tomorrow evening.</span>
                                 ) : (
-                                    <span>Tomorrow morning booking is now <strong>closed</strong> (passed 3:30 PM). You can still order for today evening!</span>
+                                    <span>Morning booking closed. You can still order for evening!</span>
                                 )}
                             </div>
-                        </div>
+                        </motion.div>
                     )
                 })()}
 
-                <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ position: 'relative', flex: '1 1 260px' }}>
-                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                {/* Search & Filters */}
+                <motion.div variants={itemVariants} className="flex flex-col md:flex-row gap-3 mb-10 px-1">
+                    <div className="relative flex-1 group">
+                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                         <input
-                            className="input"
-                            placeholder="Search products..."
+                            type="text"
+                            className="input !pl-11 !py-3.5 shadow-sm hover:border-slate-300 transition-all font-semibold text-sm"
+                            placeholder="Find milk, curd, or ghee..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            style={{ paddingLeft: '2.25rem' }}
                         />
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div className="flex bg-white p-1.5 rounded-[18px] border border-slate-200 shadow-sm overflow-x-auto no-scrollbar gap-1">
                         {CATEGORIES.map((cat) => (
                             <button
                                 key={cat}
                                 onClick={() => setActiveCategory(cat)}
-                                style={{
-                                    padding: '0.5rem 1rem', borderRadius: 8, border: '1px solid',
-                                    borderColor: activeCategory === cat ? '#2563eb' : '#e2e8f0',
-                                    background: activeCategory === cat ? '#2563eb' : 'white',
-                                    color: activeCategory === cat ? 'white' : '#64748b',
-                                    fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer',
-                                    transition: 'all 0.15s',
-                                }}
+                                className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all whitespace-nowrap ${
+                                    activeCategory === cat 
+                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200' 
+                                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                                }`}
                             >
                                 {cat}
                             </button>
                         ))}
                     </div>
-                </div>
+                </motion.div>
 
-                {filtered.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔍</div>
-                        <div style={{ fontWeight: 600 }}>No products found</div>
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
-                        {CATEGORIES.filter(c => c !== 'All' && (activeCategory === 'All' || activeCategory === c)).map(cat => {
-                            const catProducts = filtered.filter(p => p.category === cat)
-                            if (catProducts.length === 0) return null
-                            return (
-                                <div key={cat} className="fade-in">
-                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        {cat === 'Milk' ? '🥛' : cat === 'Curd' ? '🫙' : '🧈'}
+                {/* Product Groups */}
+                <div className="space-y-12">
+                    {CATEGORIES.filter(c => c !== 'All' && (activeCategory === 'All' || activeCategory === c)).map(cat => {
+                        const catProducts = filtered.filter(p => p.category === cat)
+                        if (catProducts.length === 0) return null
+                        return (
+                            <motion.section key={cat} variants={itemVariants}>
+                                <div className="flex items-center gap-4 mb-5 px-1">
+                                    <h2 className="text-lg font-black text-slate-900 border-l-4 border-blue-600 pl-3 uppercase tracking-tighter">
                                         {cat}
                                     </h2>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem' }}>
-                                        {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
-                                    </div>
+                                    <div className="h-px bg-slate-100 flex-1"></div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{catProducts.length} items</span>
                                 </div>
-                            )
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {cartCount > 0 && (
-                <div style={{
-                    position: 'fixed', bottom: '85px', left: '50%', transform: 'translateX(-50%)',
-                    background: '#0f172a', color: 'white', padding: '1rem 1.5rem',
-                    borderRadius: 14, boxShadow: '0 8px 32px rgb(0 0 0 / 0.25)',
-                    display: 'flex', alignItems: 'center', gap: '1.5rem',
-                    zIndex: 200, minWidth: 320, animation: 'fadeIn 0.3s ease',
-                }}>
-                    <div>
-                        <span style={{ fontWeight: 700 }}>{cartCount} item{cartCount > 1 ? 's' : ''}</span>
-                        <span style={{ color: '#94a3b8', fontSize: '0.875rem', marginLeft: '0.5rem' }}>in cart</span>
-                    </div>
-                    <div style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#60a5fa' }}>{formatCurrency(cartTotal)}</div>
-                    <button className="btn-primary" onClick={() => navigate(`/order?type=${orderType}`)} style={{ marginLeft: 'auto', fontSize: '0.875rem' }}>
-                        Checkout →
-                    </button>
+                                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+                                    {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
+                                </div>
+                            </motion.section>
+                        )
+                    })}
+                    
+                    {filtered.length === 0 && (
+                        <div className="text-center py-20 flex flex-col items-center gap-4">
+                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                                <Search size={32} />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800">No products found</h3>
+                            <p className="text-slate-400 text-sm">Try searching for something else.</p>
+                            <button onClick={() => { setSearch(''); setActiveCategory('All'); }} className="btn-secondary !text-blue-600 !border-blue-100 !px-6 !py-2.5">Clear filters</button>
+                        </div>
+                    )}
                 </div>
-            )}
+            </motion.main>
+
+            {/* Sticky Cart Footer - Optimized for Mobile + Bottom Nav */}
+            <AnimatePresence>
+                {cartCount > 0 && (
+                    <motion.div 
+                        initial={{ y: 100, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 100, opacity: 0 }}
+                        className="fixed bottom-24 md:bottom-8 left-4 right-4 md:left-auto md:right-8 z-50 lg:z-[100]"
+                    >
+                        <div className="bg-slate-900 text-white rounded-[24px] p-4 md:min-w-[400px] shadow-2xl flex items-center justify-between border border-slate-800 relative group overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                            
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                    <ShoppingBag size={20} className="sm:size-24" />
+                                </div>
+                                <div>
+                                    <div className="text-base sm:text-lg font-black">{formatCurrency(cartTotal)}</div>
+                                    <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">{cartCount} items selected</div>
+                                </div>
+                            </div>
+                            
+                            <button 
+                                onClick={() => navigate(`/order?type=${orderType}`)}
+                                className="bg-white text-slate-900 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-black text-xs sm:text-sm flex items-center gap-2 hover:bg-blue-50 hover:scale-105 active:scale-95 transition-all shadow-xl"
+                            >
+                                Checkout <ArrowRight size={16} sm:size={18} />
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
+

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Package, Camera, X, Loader2, Check } from 'lucide-react'
-import { useProducts, uploadProductPhoto } from '../../lib/useData'
-import { supabase } from '../../lib/supabase'
+import { useProducts, uploadProductPhoto, createProduct, updateProduct, deleteProduct, updateGlobalCutoffs } from '../../lib/useData'
 import { formatCurrency } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 import Modal from '../../components/Modal'
@@ -47,7 +46,7 @@ export default function AdminProducts() {
                     finalImageUrl = await uploadProductPhoto(photoFile, editProduct?.id || 'new')
                 } catch (err) {
                     console.error('Upload failed:', err)
-                    toast.error('Storage Error: Please create a PUBLIC bucket named "product-photos" in your Supabase Dashboard to upload images.')
+                    toast.error('Storage Error: Check Cloudflare R2 configuration.')
                     setSaving(false)
                     return // Stop the save process if upload fails
                 }
@@ -63,12 +62,10 @@ export default function AdminProducts() {
             }
 
             if (editProduct) {
-                const { error } = await supabase.from('products').update(productData).eq('id', editProduct.id)
-                if (error) throw error
+                await updateProduct(editProduct.id, productData)
                 toast.success('Product updated successfully')
             } else {
-                const { error } = await supabase.from('products').insert([productData])
-                if (error) throw error
+                await createProduct(productData)
                 toast.success('Product added successfully')
             }
             refetch()
@@ -83,14 +80,7 @@ export default function AdminProducts() {
     async function saveGlobalCutoffs() {
         setUpdatingGlobal(true)
         try {
-            const { error } = await supabase.from('products')
-                .update({
-                    cutoff_morning: globalCutoffs.milk_morning,
-                    cutoff_evening: globalCutoffs.milk_evening
-                })
-                .in('category', ['Milk', 'Curd'])
-
-            if (error) throw error
+            await updateGlobalCutoffs(['Milk', 'Curd'], globalCutoffs.milk_morning, globalCutoffs.milk_evening)
             toast.success('Milk & Curd cut-offs updated for all products')
             refetch()
         } catch (err) {
@@ -132,18 +122,24 @@ export default function AdminProducts() {
         setPhotoPreview(URL.createObjectURL(file))
     }
 
-    const deleteProduct = async (id) => {
+    const handleDelete = async (id) => {
         if (!window.confirm('Delete this product?')) return
-        const { error } = await supabase.from('products').delete().eq('id', id)
-        if (error) { toast.error(error.message); return }
-        toast.success('Product deleted')
-        refetch()
+        try {
+            await deleteProduct(id)
+            toast.success('Product deleted')
+            refetch()
+        } catch (err) {
+            toast.error(err.message)
+        }
     }
 
     const toggleActive = async (p) => {
-        const { error } = await supabase.from('products').update({ active: !p.active }).eq('id', p.id)
-        if (error) { toast.error(error.message); return }
-        refetch()
+        try {
+            await updateProduct(p.id, { ...p, active: !p.active })
+            refetch()
+        } catch (err) {
+            toast.error(err.message)
+        }
     }
 
     const categoryEmoji = { Milk: '🥛', Curd: '🫙', 'Milk Products': '🧈' }
@@ -239,7 +235,7 @@ export default function AdminProducts() {
                 {/* Product Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
                     {(products || []).map(p => (
-                        <div key={p.id} className="card" style={{ opacity: p.active ? 1 : 0.6, padding: 0, overflow: 'hidden' }}>
+                        <div key={p.id} className="card group" style={{ opacity: p.active ? 1 : 0.6, padding: 0, overflow: 'hidden' }}>
                             {/* Product Image or Placeholder */}
                             <div style={{ width: '100%', height: 160, background: '#f1f5f9', position: 'relative' }}>
                                 {p.image_url ? (
@@ -249,10 +245,6 @@ export default function AdminProducts() {
                                         {categoryEmoji[p.category] || '📦'}
                                     </div>
                                 )}
-                                <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: '0.4rem' }}>
-                                    <button onClick={() => openEdit(p)} style={{ width: 32, height: 32, border: 'none', background: 'white', borderRadius: 8, cursor: 'pointer', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}><Pencil size={14} /></button>
-                                    <button onClick={() => deleteProduct(p.id)} style={{ width: 32, height: 32, border: 'none', background: 'white', borderRadius: 8, cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}><Trash2 size={14} /></button>
-                                </div>
                             </div>
 
                             <div style={{ padding: '1rem' }}>
@@ -273,33 +265,32 @@ export default function AdminProducts() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <button
                                             onClick={async () => {
-                                                const { error } = await supabase.from('products').update({ stock_qty: p.stock_qty > 0 ? 0 : 1 }).eq('id', p.id)
-                                                if (error) toast.error(error.message)
-                                                else refetch()
+                                                try {
+                                                    await updateProduct(p.id, { ...p, stock_qty: p.stock_qty > 0 ? 0 : 1 })
+                                                    refetch()
+                                                } catch (err) {
+                                                    toast.error(err.message)
+                                                }
                                             }}
-                                            style={{
-                                                padding: '0.25rem 0.75rem', borderRadius: 20, border: 'none',
-                                                background: p.stock_qty > 0 ? '#dcfce7' : '#fee2e2',
-                                                color: p.stock_qty > 0 ? '#15803d' : '#991b1b',
-                                                fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', gap: '0.25rem'
-                                            }}
+                                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all ${
+                                                p.stock_qty > 0 ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                                            }`}
                                         >
-                                            <Package size={12} />
                                             {p.stock_qty > 0 ? 'In Stock' : 'Out of Stock'}
                                         </button>
                                         <button
                                             onClick={() => toggleActive(p)}
-                                            style={{
-                                                padding: '0.25rem 0.75rem', borderRadius: 20, border: 'none',
-                                                background: p.active ? '#eff6ff' : '#f1f5f9',
-                                                color: p.active ? '#1e40af' : '#94a3b8',
-                                                fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
-                                            }}
+                                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all ${
+                                                p.active ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' : 'bg-slate-100 text-slate-500'
+                                            }`}
                                         >
                                             {p.active ? 'Active' : 'Archived'}
                                         </button>
                                     </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                                    <button onClick={() => openEdit(p)} className="btn-secondary" style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}><Pencil size={14} /> Edit</button>
+                                    <button onClick={() => handleDelete(p.id)} className="btn-secondary" style={{ padding: '0.4rem', color: '#dc2626', borderColor: '#fecaca' }}><Trash2 size={14} /></button>
                                 </div>
                             </div>
                         </div>
@@ -438,7 +429,7 @@ export default function AdminProducts() {
                         </div>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '-0.5rem' }}>
-                        Note: If product images are not showing, ensure your Supabase storage bucket has public read access.
+                        Note: If product images are not showing, ensure your Cloudflare R2 bucket has public read access.
                     </p>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
                         <button className="btn-secondary" onClick={closeModal}>Cancel</button>

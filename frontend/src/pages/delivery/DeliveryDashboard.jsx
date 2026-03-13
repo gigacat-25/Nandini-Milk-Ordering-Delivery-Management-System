@@ -85,7 +85,19 @@ export default function DeliveryDashboard() {
             const isDelivered = completedDeliveries.some(d => d.subscription_id === sub.id)
 
             const activeItems = sub.items?.filter(i => !partialSkips?.some(ps => ps.target_id === sub.id && ps.product_id === i.product_id)) || []
-            const subItemsStr = activeItems.map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
+            
+            // Group items to avoid duplicates like "1x Milk, 1x Milk"
+            const grouped = activeItems.reduce((acc, item) => {
+                const pid = item.product_id
+                if (!acc[pid]) {
+                    acc[pid] = { ...item }
+                } else {
+                    acc[pid].quantity += item.quantity
+                }
+                return acc
+            }, {})
+
+            const subItemsStr = Object.values(grouped).map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
             const subAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
 
             const hasFunds = (customer?.wallet_balance || 0) >= subAmount
@@ -101,30 +113,47 @@ export default function DeliveryDashboard() {
                 phone: customer?.phone || 'N/A',
                 google_maps: customer?.google_maps_url,
                 instructions: customer?.delivery_instructions,
-                items: subItemsStr,
+                itemArray: Object.values(grouped),
                 slot: sub.delivery_slot,
                 status,
-                hasActiveItems: activeItems.length > 0
+                hasActiveItems: activeItems.length > 0,
+                amount: subAmount
             }
         })
 
         // 2. Process One-Off Orders
         const orderDeliveries = orders.filter(o => o.delivery_slot === activeSlot).map(order => {
-            const customer = order.users
-            const activeItems = order.items?.filter(i => !partialSkips?.some(ps => ps.target_id === order.id && ps.product_id === i.product_id)) || []
-            const itemsStr = activeItems.map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
+            const orderItems = order.items?.map(i => ({
+                ...i,
+                isSkipped: partialSkips?.some(ps => ps.target_id === order.id && ps.product_id === i.product_id)
+            })) || []
+
+            const activeItems = orderItems.filter(i => !i.isSkipped)
+            
+            // Group items to avoid duplicates
+            const grouped = activeItems.reduce((acc, item) => {
+                const pid = item.product_id
+                if (!acc[pid]) {
+                    acc[pid] = { ...item }
+                } else {
+                    acc[pid].quantity += item.quantity
+                }
+                return acc
+            }, {})
+
+            const itemsStr = Object.values(grouped).map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
             const orderAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
 
             return {
                 id: order.id,
                 type: 'order',
                 customerId: order.customer_id,
-                customer: customer?.full_name || 'Unknown',
-                address: customer?.address || 'Address not provided',
-                phone: customer?.phone || 'N/A',
-                google_maps: customer?.google_maps_url,
-                instructions: customer?.delivery_instructions,
-                items: itemsStr,
+                customer: order.customer_name || 'Unknown',
+                address: order.customer_address || 'Address not provided',
+                phone: order.customer_phone || 'N/A',
+                google_maps: order.google_maps_url,
+                instructions: order.delivery_instructions,
+                itemArray: Object.values(grouped),
                 slot: order.delivery_slot,
                 status: order.status === 'delivered' ? 'delivered' : 'pending',
                 amount: orderAmount,
@@ -164,7 +193,7 @@ export default function DeliveryDashboard() {
 
             // 2. Mark as delivered
             if (d.type === 'order') {
-                await markOrderDelivered(d.id)
+                await markOrderDelivered(d.id, d.customerId, d.amount, date)
                 await refetchOrders()
             } else {
                 await markSubscriptionDelivered(d.customerId, d.id, date, d.amount)
@@ -298,31 +327,41 @@ export default function DeliveryDashboard() {
                                 </div>
                             )}
 
-                            <div style={{
-                                fontSize: '0.875rem',
-                                color: '#0f172a',
-                                fontWeight: 600,
-                                padding: '0.5rem 0.75rem',
-                                background: '#f8fafc',
-                                borderRadius: 8,
-                                border: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                <span>📦 {d.items}</span>
-                                <span style={{
-                                    padding: '0.125rem 0.5rem',
-                                    background: d.slot === 'morning' ? '#eff6ff' : '#fff7ed',
-                                    color: d.slot === 'morning' ? '#2563eb' : '#9a3412',
-                                    borderRadius: 6,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 800,
-                                    textTransform: 'uppercase',
-                                    border: `1px solid ${d.slot === 'morning' ? '#dbeafe' : '#ffedd5'}`
-                                }}>
-                                    {d.slot}
-                                </span>
+                            <div style={{ marginTop: '0.25rem' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Products to Deliver</span>
+                                    <span style={{ 
+                                        padding: '0.1rem 0.4rem', 
+                                        background: d.slot === 'morning' ? '#eff6ff' : '#fff7ed', 
+                                        color: d.slot === 'morning' ? '#2563eb' : '#9a3412',
+                                        borderRadius: 4, 
+                                        border: `1px solid ${d.slot === 'morning' ? '#dbeafe' : '#ffedd5'}`
+                                    }}>{d.slot}</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                    {d.itemArray.map((item, idx) => (
+                                        <div key={idx} style={{ 
+                                            display: 'flex', alignItems: 'center', gap: '0.75rem', 
+                                            background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: 10,
+                                            border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                        }}>
+                                            <div style={{ 
+                                                fontSize: '1.25rem', fontWeight: 900, color: '#2563eb',
+                                                minWidth: '2.5rem', display: 'flex', alignItems: 'center'
+                                            }}>
+                                                {item.quantity}x
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontWeight: 800, color: '#1e293b', fontSize: '1rem' }}>{item.products?.name}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{item.products?.size_label}</div>
+                                            </div>
+                                            <div style={{ fontSize: '1.25rem' }}>
+                                                {item.products?.name?.toLowerCase().includes('milk') ? '🥛' : 
+                                                 item.products?.name?.toLowerCase().includes('curd') ? '🫙' : '📦'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
                             {d.status === 'delivered' ? (

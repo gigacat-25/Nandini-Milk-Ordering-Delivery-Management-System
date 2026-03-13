@@ -113,14 +113,14 @@ export default function AdminSubscriptions() {
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Customer</th>
-                                    <th>Subscription ID</th>
-                                    <th>Timing</th>
-                                    <th>Items</th>
-                                    <th>Daily Amount</th>
-                                    <th>Status</th>
-                                    <th>Created</th>
-                                    <th></th>
+                                    <th className="text-left w-[20%]">Subscriber</th>
+                                    <th className="text-left">ID</th>
+                                    <th className="text-center">Timing</th>
+                                    <th className="text-left w-[25%]">Items Preview</th>
+                                    <th className="text-right">Daily Value</th>
+                                    <th className="text-center">Status</th>
+                                    <th className="text-right">Registered</th>
+                                    <th className="w-[80px]"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -131,28 +131,29 @@ export default function AdminSubscriptions() {
                                 ) : filteredSubs.map((s) => (
                                     <tr key={s.id} style={{ opacity: s.status === 'active' ? 1 : 0.6 }}>
                                         <td>
-                                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{s.customer.full_name}</div>
+                                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9375rem' }}>{s.customer.full_name}</div>
                                             <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{s.customer.phone}</div>
                                         </td>
-                                        <td style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
+                                        <td style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>
                                             {s.id.split('-')[0]}
                                         </td>
-                                        <td>
+                                        <td className="text-center">
                                             <span style={{ 
-                                                fontSize: '0.7rem', fontWeight: 700, padding: '0.125rem 0.5rem', borderRadius: 4, textTransform: 'uppercase',
+                                                fontSize: '0.7rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: 99, textTransform: 'uppercase',
                                                 background: s.delivery_slot === 'morning' ? '#eff6ff' : '#fff7ed',
                                                 color: s.delivery_slot === 'morning' ? '#2563eb' : '#9a3412',
+                                                border: `1px solid ${s.delivery_slot === 'morning' ? '#dbeafe' : '#ffedd5'}`
                                             }}>
                                                 {s.delivery_slot}
                                             </span>
                                         </td>
-                                        <td style={{ fontSize: '0.8125rem', color: '#475569', maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <td className="max-w-[200px] truncate italic text-slate-500 font-medium">
                                             {s.items_str || 'No items'}
                                         </td>
-                                        <td style={{ fontWeight: 700, color: '#0f172a' }}>
+                                        <td className="text-right font-black text-slate-900">
                                             {formatCurrency(s.amount)}
                                         </td>
-                                        <td>
+                                        <td className="text-center">
                                             {s.status === 'active' ? (
                                                 s.isPausedToday 
                                                     ? <span className="badge-warning">Paused Today</span> 
@@ -161,10 +162,10 @@ export default function AdminSubscriptions() {
                                                 <span className="badge-gray">Cancelled</span>
                                             )}
                                         </td>
-                                        <td style={{ color: '#64748b', fontSize: '0.8125rem' }}>{formatDate(s.created_at)}</td>
-                                        <td>
-                                            <button className="btn-secondary" style={{ padding: '0.375rem 0.625rem', fontSize: '0.8125rem' }} onClick={() => setSelectedSub(s)}>
-                                                <Eye size={14} />
+                                        <td className="text-right font-medium text-slate-500">{formatDate(s.created_at)}</td>
+                                        <td className="text-right">
+                                            <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors" title="View Details" onClick={() => setSelectedSub(s)}>
+                                                <Eye size={18} />
                                             </button>
                                         </td>
                                     </tr>

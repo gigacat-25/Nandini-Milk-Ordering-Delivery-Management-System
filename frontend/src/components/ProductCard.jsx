@@ -1,17 +1,18 @@
 import { useCartStore } from '../store'
 import { formatCurrency } from '../lib/utils'
-import { Plus, Minus, ShoppingBag } from 'lucide-react'
+import { Plus, Minus, ShoppingBag, Info, Clock } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 export default function ProductCard({ product }) {
     const { items, addItem, updateQty } = useCartStore()
     const cartItem = items.find((i) => i.id === product.id)
 
     const categoryColors = {
-        Milk: { bg: '#dbeafe', text: '#1e40af', emoji: '🥛' },
-        Curd: { bg: '#fef9c3', text: '#854d0e', emoji: '🫙' },
-        'Milk Products': { bg: '#fef3c7', text: '#92400e', emoji: '🧈' },
+        Milk: { bg: 'bg-blue-50', text: 'text-blue-700', emoji: '🥛' },
+        Curd: { bg: 'bg-amber-50', text: 'text-amber-700', emoji: '🫙' },
+        'Milk Products': { bg: 'bg-emerald-50', text: 'text-emerald-700', emoji: '🧈' },
     }
-    const colors = categoryColors[product.category] || { bg: '#f1f5f9', text: '#475569' }
+    const colors = categoryColors[product.category] || { bg: 'bg-slate-50', text: 'text-slate-700' }
 
     const now = new Date()
     const currentTime = now.getHours() + now.getMinutes() / 60
@@ -28,158 +29,112 @@ export default function ProductCard({ product }) {
     }
 
     return (
-        <div className="card fade-in" style={{
-            display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-        }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgb(0 0 0 / 0.08)' }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px 0 rgb(0 0 0 / 0.05)' }}
+        <motion.div 
+            whileHover={{ y: -5 }}
+            className={`card group flex flex-col p-0 overflow-hidden ${product.stock_qty <= 0 ? 'opacity-80' : ''} bg-white border-slate-100 shadow-xl shadow-slate-200/40`}
         >
-            {/* Product Image or Icon */}
-            <div style={{ width: '100%', height: 180, background: colors.bg, position: 'relative', overflow: 'hidden' }}>
+            {/* Image Section */}
+            <div className={`relative h-44 w-full bg-gradient-to-br ${colors.bg.replace('bg-', 'from-')}/40 to-white flex items-center justify-center overflow-hidden`}>
+                <div className={`absolute inset-0 bg-gradient-to-tr from-white/0 to-${colors.bg.replace('bg-', '')}/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                
                 {product.image_url ? (
                     <img
                         src={product.image_url}
                         alt={product.name}
-                        style={{
-                            width: '100%', height: '100%', objectFit: 'cover',
-                            filter: product.stock_qty <= 0 ? 'grayscale(0.8) opacity(0.6)' : 'none',
-                            transition: 'filter 0.3s ease'
-                        }}
+                        className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${product.stock_qty <= 0 ? 'grayscale' : ''}`}
                     />
                 ) : (
-                    <div style={{
-                        width: '100%', height: '100%', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', fontSize: 56,
-                        filter: product.stock_qty <= 0 ? 'grayscale(1)' : 'none',
-                        opacity: product.stock_qty <= 0 ? 0.5 : 1
-                    }}>
-                        {colors.emoji}
+                    <div className="text-6xl motion-safe:animate-bounce-slow drop-shadow-xl saturate-150">
+                        {colors.emoji || '📦'}
+                    </div>
+                )}
+                
+                {/* Product Category Badge */}
+                <div className="absolute top-3 left-3">
+                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-white/90 backdrop-blur-md shadow-sm ${colors.text} border border-white/50`}>
+                        {product.category}
+                    </span>
+                </div>
+
+                {/* Stock Badge */}
+                {product.stock_qty <= 0 && (
+                    <div className="absolute top-3 right-3">
+                        <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-red-500 text-white shadow-lg">
+                            Sold Out
+                        </span>
                     </div>
                 )}
 
-                {/* Overlay Badges */}
-                <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', pointerEvents: 'none' }}>
-                    <span style={{
-                        background: colors.bg, color: colors.text,
-                        padding: '0.25rem 0.75rem', borderRadius: 20,
-                        fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '1px solid rgba(255,255,255,0.2)'
-                    }}>
-                        {product.category}
-                    </span>
-                    {product.stock_qty <= 0 && (
-                        <span style={{
-                            background: '#ef4444', color: 'white',
-                            padding: '0.25rem 0.75rem', borderRadius: 20,
-                            fontSize: '0.7rem', fontWeight: 800,
-                            textTransform: 'uppercase', letterSpacing: '0.025em',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}>
-                            Out of Stock
-                        </span>
-                    )}
-                    {product.stock_qty > 0 && currentTime >= eveningCutoff && currentTime >= morningCutoff && (
-                        <span style={{
-                            background: '#475569', color: 'white',
-                            padding: '0.25rem 0.75rem', borderRadius: 20,
-                            fontSize: '0.7rem', fontWeight: 800,
-                            textTransform: 'uppercase',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}>
-                            Today's Booking Closed
-                        </span>
-                    )}
+                {/* Availability Pills */}
+                <div className="absolute bottom-3 left-3 right-3 flex gap-2">
+                    <div className="flex-1 bg-white/90 backdrop-blur-md rounded-lg py-1.5 px-2 flex flex-col items-center justify-center border border-white/50 shadow-sm">
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Morning Slot</span>
+                        <div className="flex items-center gap-1">
+                            <span className={`text-[9px] font-black ${currentTime < morningCutoff ? 'text-blue-600' : 'text-slate-500'}`}>
+                                {currentTime < morningCutoff ? '🌅 REQ NEXT' : '🗓️ DAY AFTER'}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex-1 bg-white/90 backdrop-blur-md rounded-lg py-1.5 px-2 flex flex-col items-center justify-center border border-white/50 shadow-sm">
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Evening Slot</span>
+                        <div className="flex items-center gap-1">
+                            <span className={`text-[9px] font-black ${currentTime < eveningCutoff ? 'text-amber-600' : 'text-slate-500'}`}>
+                                {currentTime < eveningCutoff ? '🌆 TODAY' : '🗓️ TOMORROW'}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Info */}
-            <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem', opacity: product.stock_qty <= 0 ? 0.7 : 1 }}>
-                <div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.125rem' }}>
+            {/* Info Section */}
+            <div className="p-4 flex-1 flex flex-col">
+                <div className="min-h-[4rem] mb-2">
+                    <h3 className="text-sm font-black text-slate-900 leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tight line-clamp-2">
                         {product.name}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        {product.size_label}
-                    </div>
-                </div>
-
-                <div style={{ fontSize: '0.8125rem', color: '#64748b', lineHeight: 1.4, flex: 1 }}>
-                    {product.description}
-                </div>
-
-                {/* Live Availability Status */}
-                <div style={{
-                    marginTop: '0.25rem',
-                    padding: '0.5rem',
-                    background: '#f8fafc',
-                    borderRadius: 8,
-                    border: '1px solid #f1f5f9',
-                    fontSize: '0.75rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.25rem'
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: '#64748b' }}>🌅 Next Morning Entry:</span>
-                        <span style={{ fontWeight: 700, color: currentTime < morningCutoff ? '#059669' : '#64748b' }}>
-                            {morningStatus} {currentTime >= morningCutoff ? '' : ' (Order by ' + formatTimeStr(morningCutoff) + ')'}
-                        </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: '#64748b' }}>🌆 Next Evening Entry:</span>
-                        <span style={{ fontWeight: 700, color: currentTime < eveningCutoff ? '#059669' : '#64748b' }}>
-                            {eveningStatus} {currentTime >= eveningCutoff ? '' : ' (Order by ' + formatTimeStr(eveningCutoff) + ')'}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-1">
+                        <div className="w-4 h-4 rounded-md bg-slate-100 flex items-center justify-center">
+                            <Info size={10} className="text-slate-400" />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                            {product.size_label}
                         </span>
                     </div>
                 </div>
 
-                {/* Price + Add to cart */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                    <div>
-                        <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-                            {formatCurrency(product.price)}
-                        </span>
+                {/* Price & Action Row */}
+                <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50 gap-2">
+                    <div className="flex flex-col flex-shrink-0">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-0.5">Price</span>
+                        <span className="text-lg font-black text-slate-900 leading-none">{formatCurrency(product.price)}</span>
                     </div>
 
                     {product.stock_qty <= 0 ? (
-                        <button
-                            className="btn-secondary"
-                            disabled
-                            style={{ padding: '0.5rem 0.875rem', fontSize: '0.8125rem', background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed', border: '1px solid #e2e8f0' }}
-                        >
-                            Unavailable
+                        <button disabled className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl cursor-not-allowed border border-slate-100">
+                            Closed
                         </button>
                     ) : !cartItem ? (
                         <button
-                            className="btn-primary"
-                            style={{ padding: '0.5rem 0.875rem', fontSize: '0.8125rem' }}
+                            className="bg-blue-600 text-white p-2.5 sm:px-4 sm:py-2.5 rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:bg-blue-700 w-fit"
                             onClick={() => addItem(product, 1)}
                         >
-                            <ShoppingBag size={14} /> Add
+                            <Plus size={18} className="flex-shrink-0" /> 
+                            <span className="text-[11px] font-black uppercase tracking-widest hidden sm:inline">Add</span>
                         </button>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div className="flex items-center bg-blue-50 rounded-xl p-1 border border-blue-100 shadow-inner">
                             <button
-                                onClick={() => updateQty(product.id, cartItem.quantity - 1)}
-                                style={{
-                                    width: 30, height: 30, borderRadius: 8, border: '1px solid #e2e8f0',
-                                    background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center', color: '#374151',
-                                }}
+                                onClick={() => updateQty(product.id, Math.max(0, cartItem.quantity - 1))}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-blue-600 hover:bg-white hover:shadow-sm transition-all"
                             >
                                 <Minus size={14} />
                             </button>
-                            <span style={{ fontSize: '0.9375rem', fontWeight: 700, minWidth: 20, textAlign: 'center', color: '#2563eb' }}>
+                            <span className="min-w-[1.5rem] px-1 text-center font-black text-blue-600 text-xs">
                                 {cartItem.quantity}
                             </span>
                             <button
                                 onClick={() => updateQty(product.id, cartItem.quantity + 1)}
-                                style={{
-                                    width: 30, height: 30, borderRadius: 8, border: 'none',
-                                    background: '#2563eb', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center', color: 'white',
-                                }}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-blue-600 text-white shadow-md shadow-blue-200 hover:scale-105 transition-all"
                             >
                                 <Plus size={14} />
                             </button>
@@ -187,6 +142,7 @@ export default function ProductCard({ product }) {
                     )}
                 </div>
             </div>
-        </div>
+        </motion.div>
     )
 }
+

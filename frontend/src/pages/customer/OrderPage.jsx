@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar, Navigation, MessageSquare } from 'lucide-react'
+import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar, Navigation, MessageSquare, Clock, ArrowRight, ArrowLeft, ShoppingBag } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useCartStore } from '../../store'
-import { formatCurrency } from '../../lib/utils'
-import { createOrder, createSubscription, useUserProfile, addWalletFunds } from '../../lib/useData'
-import { supabase } from '../../lib/supabase'
+import { formatCurrency, formatDate } from '../../lib/utils'
+import { createOrder, createSubscription, useUserProfile, addWalletFunds, updateUserProfile } from '../../lib/useData'
 import { useUser } from '@clerk/clerk-react'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
@@ -41,24 +41,22 @@ export default function OrderPage() {
     let cutoffWarning = null
 
     if (deliverySlot === 'morning') {
-        if (currentTime >= 15.5) { // 3:30 PM cutoff for next morning
+        if (currentTime >= 15.5) { 
             minDateObj = dayAfter
-            cutoffWarning = "Today's 3:30 PM cutoff has passed. Your earliest morning delivery is now the day after tomorrow."
+            cutoffWarning = "Today's 3:30 PM cutoff has passed. Earliest morning delivery is day after tomorrow."
         } else {
             minDateObj = tomorrow
         }
-    } else { // evening
-        if (currentTime >= 19.5) { // 7:30 PM cutoff for same-day evening
+    } else { 
+        if (currentTime >= 19.5) { 
             minDateObj = tomorrow
-            cutoffWarning = "Today's 7:30 PM cutoff has passed. Your earliest evening delivery is tomorrow evening."
+            cutoffWarning = "Today's 7:30 PM cutoff has passed. Earliest evening delivery is tomorrow."
         } else {
             minDateObj = today
         }
     }
 
     const minDateStr = minDateObj.toISOString().split('T')[0]
-
-    // Initialize deliveryDate lazily, but also update it if it's invalid
     const [deliveryDate, setDeliveryDate] = useState(minDateStr)
 
     useEffect(() => {
@@ -67,406 +65,355 @@ export default function OrderPage() {
         }
     }, [deliverySlot, orderType, minDateStr, deliveryDate])
 
-    // Toast warning the moment user selects a slot that's past its cutoff
     useEffect(() => {
         if (cutoffWarning) {
-            toast(
-                (t) => (
-                    <span style={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
-                        <strong>⏰ Cut-off passed!</strong><br />
-                        {cutoffWarning}
-                    </span>
-                ),
-                {
-                    icon: '⚠️',
-                    duration: 5000,
-                    style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }
-                }
-            )
+            toast.error(cutoffWarning, { icon: '⏰', duration: 4000 })
         }
     }, [deliverySlot])
 
     const [orderId, setOrderId] = useState('')
-
-    // Fetch profile to get wallet balance & app access info
     const { data: profile } = useUserProfile(user?.id)
     const walletBalance = profile?.wallet_balance || 0
     const hasActiveAppFee = profile?.app_fee_expiry ? new Date(profile.app_fee_expiry) > new Date() : false
 
-    // Calculate Totals
     const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
     const deliveryFee = (orderType === 'one-time' && !hasActiveAppFee) ? 20 : 0
     const total = subtotal + deliveryFee
 
     useEffect(() => {
-        if (!user) return
-        supabase.from('users').select('address, google_maps_url, delivery_instructions').eq('id', user.id).single()
-            .then(({ data }) => {
-                if (data) {
-                    if (data.address) setAddress(data.address)
-                    if (data.google_maps_url) setMapsUrl(data.google_maps_url)
-                    if (data.delivery_instructions) setInstructions(data.delivery_instructions)
-                }
-            })
-    }, [user])
+        if (profile) {
+            if (profile.address) setAddress(profile.address)
+            if (profile.google_maps_url) setMapsUrl(profile.google_maps_url)
+            if (profile.delivery_instructions) setInstructions(profile.delivery_instructions)
+        }
+    }, [profile])
 
     async function handlePayment() {
-        if (!user) return toast.error('You must be logged in to order')
+        if (!user) return toast.error('Please login to place order')
         setPayLoading(true)
         try {
-            // Simulated payment delay
+            console.log('Starting payment process...', { orderType, total, itemsCount: items.length });
             await new Promise((r) => setTimeout(r, 1800))
-
-            // Save the address details back to user profile so they persist
-            await supabase.from('users').update({
+            
+            console.log('Updating user profile...');
+            await updateUserProfile(user.id, {
                 address,
                 google_maps_url: mapsUrl,
-                delivery_instructions: instructions
-            }).eq('id', user.id)
+                delivery_instructions: instructions,
+                phone: profile?.phone || user?.primaryPhoneNumber?.phoneNumber || ''
+            })
 
-            // Actually create the order or subscription in Supabase
+            let finalOrderId = '';
             if (orderType === 'subscription') {
+                console.log('Creating subscription...');
                 const sub = await createSubscription(user.id, items, deliverySlot, frequency)
-                setOrderId(sub.id.slice(0, 8).toUpperCase())
+                if (!sub?.id) throw new Error('Subscription creation failed: No ID returned')
+                finalOrderId = sub.id.slice(0, 8).toUpperCase();
             } else {
-                // For one-time orders, deduct from wallet upfront
                 if (walletBalance < total) {
-                    toast.error('Insufficient wallet balance. Please add funds.')
+                    toast.error('Insufficient wallet balance')
                     setPayLoading(false)
                     return
                 }
-
+                console.log('Creating one-time order...');
                 const order = await createOrder(user.id, items, total, deliverySlot, deliveryDate)
-                await addWalletFunds(user.id, -total) // Deduct total from wallet
-                setOrderId(order.id.slice(0, 8).toUpperCase())
+                if (!order?.id) throw new Error('Order creation failed: No ID returned')
+                
+                // One-time orders are now deducted only upon delivery, same as subscriptions.
+                // await addWalletFunds(user.id, -total)
+                finalOrderId = order.id.slice(0, 8).toUpperCase();
             }
 
+            setOrderId(finalOrderId);
             clearCart()
             setStep(4)
+            console.log('Order confirmed:', finalOrderId);
         } catch (error) {
-            console.error(error)
-            toast.error(error.message || 'Failed to place order')
+            console.error('Checkout error:', error);
+            toast.error(error.message || 'Order failed')
         } finally {
             setPayLoading(false)
         }
     }
 
+    const containerVariants = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }
+
     if (step === 4) {
         return (
-            <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+            <div className="min-h-screen bg-[#f8fafc]">
                 <Navbar />
-                <div style={{ maxWidth: 520, margin: '4rem auto', padding: '2rem 1.5rem', textAlign: 'center' }}>
-                    <div className="card fade-in">
-                        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎉</div>
-                        <CheckCircle size={48} color="#059669" style={{ marginBottom: '1rem' }} />
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem' }}>{orderType === 'subscription' ? 'Subscription Confirmed!' : 'Order Confirmed!'}</h2>
-                        <p style={{ color: '#64748b', margin: '0 0 0.5rem' }}>Your {orderType === 'subscription' ? 'subscription' : 'order'} <strong>{orderId}</strong> has been placed successfully.</p>
-                        <p style={{ color: '#64748b', margin: '0 0 2rem', fontSize: '0.9rem' }}>
-                            Fresh Nandini products will be delivered by <strong>7:00 AM</strong> {orderType === 'subscription' ? `starting tomorrow (${frequency})` : 'tomorrow'}.
-                        </p>
-                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-                            <button className="btn-secondary" onClick={() => navigate('/dashboard')}>Dashboard</button>
-                            <button className="btn-primary" onClick={() => { setStep(1); navigate('/products') }}>Order More</button>
+                <motion.div initial="hidden" animate="visible" variants={containerVariants} className="max-w-xl mx-auto px-4 py-20 text-center">
+                    <div className="card p-10 flex flex-col items-center gap-6 shadow-2xl shadow-emerald-500/10 border-emerald-100">
+                        <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 mb-2">
+                            <CheckCircle size={48} />
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Success!</h2>
+                            <p className="text-slate-500 font-medium">Your {orderType === 'subscription' ? 'subscription' : 'order'} <span className="text-slate-900 font-heavy">#{orderId}</span> is confirmed.</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-2xl p-6 w-full text-left space-y-2 border border-slate-100">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Delivery Promise</div>
+                            <p className="text-sm font-semibold text-slate-700 leading-relaxed">
+                                Fresh products will reach your doorstep by <span className="text-blue-600">7:00 AM</span> {orderType === 'subscription' ? `every day (${frequency})` : formatDate(deliveryDate)}.
+                            </p>
+                        </div>
+                        <div className="flex gap-4 w-full">
+                            <button className="btn-secondary flex-1" onClick={() => navigate('/dashboard')}>My Dashboard</button>
+                            <button className="btn-primary flex-1" onClick={() => navigate('/products')}>Keep Shopping</button>
                         </div>
                     </div>
-                </div>
+                </motion.div>
             </div>
         )
     }
 
     return (
-        <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+        <div className="min-h-screen bg-[#f8fafc] pb-24 md:pb-10">
             <Navbar />
-            <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem' }}>
-                <div className="page-header">
-                    <h1 className="page-title">{orderType === 'subscription' ? 'Set Up Subscription' : 'Place One-Time Order'}</h1>
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+                <div className="mb-10 text-center md:text-left">
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                        {orderType === 'subscription' ? 'Plan your Daily Milk' : 'Checkout & Pay'}
+                    </h1>
+                    <p className="text-slate-500 font-medium mt-1">Review your basket and delivery preferences.</p>
                 </div>
 
-                {/* Progress Steps */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
-                    {['Items', 'Details', 'Confirm'].map((s, i) => (
-                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{
-                                width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                background: step > i + 1 ? '#059669' : step === i + 1 ? '#2563eb' : '#e2e8f0',
-                                color: step >= i + 1 ? 'white' : '#94a3b8', fontSize: '0.75rem', fontWeight: 700,
-                            }}>
-                                {step > i + 1 ? <CheckCircle size={14} /> : i + 1}
+                {/* Modern Progress Bar */}
+                <div className="flex items-center justify-between mb-12 max-w-2xl mx-auto">
+                    {[
+                        { icon: ShoppingBag, label: 'Basket' },
+                        { icon: MapPin, label: 'Delivery' },
+                        { icon: CreditCard, label: 'Confirm' }
+                    ].map((s, i) => (
+                        <div key={i} className="flex flex-col items-center gap-2 group flex-1">
+                            <div className="relative flex items-center w-full">
+                                <div className={`flex-1 h-1 rounded-full mr-2 ${step > i + 1 ? 'bg-blue-600' : 'bg-slate-200'}`} />
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-sm ${
+                                    step > i + 1 ? 'bg-blue-600 text-white' : step === i + 1 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-blue-100' : 'bg-white border-2 border-slate-200 text-slate-300'
+                                }`}>
+                                    {step > i + 1 ? <CheckCircle size={20} /> : <s.icon size={20} />}
+                                </div>
+                                <div className={`flex-1 h-1 rounded-full ml-2 ${step > i ? 'bg-blue-600/30' : 'bg-slate-200'}`} />
                             </div>
-                            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: step === i + 1 ? '#2563eb' : '#94a3b8' }}>{s}</span>
-                            {i < 2 && <div style={{ width: 40, height: 2, background: step > i + 1 ? '#059669' : '#e2e8f0' }} />}
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${step >= i + 1 ? 'text-slate-900' : 'text-slate-300'}`}>{s.label}</span>
                         </div>
                     ))}
                 </div>
 
-                <div className="flex flex-col lg:grid lg:grid-cols-[1fr_340px] gap-6">
-                    {/* Left panel */}
-                    <div>
-                        {step === 1 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                {/* Cutoff info banner always visible on Step 1 */}
-                                <div style={{ padding: '0.875rem 1rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontSize: '0.8rem', color: '#1e40af', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                                    <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⏰</span>
-                                    <div>
-                                        <strong>Order Cut-Off Times</strong>
-                                        <div style={{ marginTop: '0.25rem', lineHeight: 1.6 }}>
-                                            🌅 <strong>Morning</strong> (before 7 AM): Order by <strong>3:30 PM</strong> the previous day<br />
-                                            🌆 <strong>Evening</strong> (after 5 PM): Order by <strong>7:30 PM</strong> the same day
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Left Panel: Checkout Steps */}
+                    <div className="lg:col-span-8">
+                        <AnimatePresence mode="wait">
+                            {step === 1 && (
+                                <motion.div key="step1" initial="hidden" animate="visible" exit={{ opacity: 0, x: -10 }} variants={containerVariants} className="space-y-6">
+                                    <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100 flex gap-4">
+                                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm"><Clock size={20} /></div>
+                                        <div>
+                                            <div className="text-xs font-bold text-blue-900 uppercase tracking-widest mb-1">Timing Guidelines</div>
+                                            <div className="text-xs text-blue-800/70 font-medium leading-relaxed">
+                                                🌅 Morning orders: Before 3:30 PM previous day<br />
+                                                🌆 Evening orders: Before 7:30 PM same day
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="card">
-                                    <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Your Selected Items</h2>
-                                    {items.length === 0 ? (
-                                        <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                                            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🛒</div>
-                                            <div style={{ fontWeight: 600 }}>No items selected</div>
-                                            <button className="btn-primary" onClick={() => navigate(`/products?type=${orderType}`)} style={{ marginTop: '1rem' }}>Browse Products</button>
-                                        </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            {items.map((item) => (
-                                                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem', background: '#f8fafc', borderRadius: 10 }}>
-                                                    <div style={{ fontSize: '1.75rem', width: 44, flexShrink: 0 }}>
-                                                        {item.category === 'Milk' ? '🥛' : item.category === 'Curd' ? '🫙' : '🧈'}
-                                                    </div>
-                                                    <div style={{ flex: 1 }}>
-                                                        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#0f172a' }}>{item.name}</div>
-                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.size_label}</div>
-                                                    </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <button onClick={() => updateQty(item.id, item.quantity - 1)} style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                            <Minus size={12} />
-                                                        </button>
-                                                        <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{item.quantity}</span>
-                                                        <button onClick={() => updateQty(item.id, item.quantity + 1)} style={{ width: 28, height: 28, borderRadius: 6, border: 'none', background: '#2563eb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                                                            <Plus size={12} />
-                                                        </button>
-                                                    </div>
-                                                    <div style={{ fontWeight: 700, color: '#0f172a', minWidth: 64, textAlign: 'right' }}>{formatCurrency(item.price * item.quantity)}</div>
-                                                    <button onClick={() => removeItem(item.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.25rem' }}>
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
 
-                        {step === 2 && (
-                            <div className="card">
-                                <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Delivery Details</h2>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <div>
-                                        <label className="label"><MapPin size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Address</label>
-                                        <textarea
-                                            className="input"
-                                            rows={2}
-                                            placeholder="House Number, Street, Landmark..."
-                                            value={address}
-                                            onChange={(e) => setAddress(e.target.value)}
-                                            style={{ resize: 'vertical' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label"><Navigation size={13} style={{ display: 'inline', marginRight: 4 }} />Google Maps Link</label>
-                                        <input
-                                            type="url"
-                                            className="input"
-                                            placeholder="https://maps.google.com/..."
-                                            value={mapsUrl}
-                                            onChange={e => setMapsUrl(e.target.value)}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label"><MessageSquare size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Instructions (Optional)</label>
-                                        <input
-                                            type="text"
-                                            className="input"
-                                            placeholder="E.g. Leave at the gate..."
-                                            value={instructions}
-                                            onChange={e => setInstructions(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4 mt-2">
-                                        {orderType === 'one-time' ? (
-                                            <div>
-                                                <label className="label"><Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />Delivery Date</label>
-                                                <input
-                                                    className="input"
-                                                    type="date"
-                                                    value={deliveryDate}
-                                                    onChange={(e) => setDeliveryDate(e.target.value)}
-                                                    min={minDateStr}
-                                                />
+                                    <div className="card p-0 overflow-hidden border-slate-100 shadow-xl shadow-slate-200/30">
+                                        <div className="p-6 border-b border-slate-50 bg-slate-50/30"><h2 className="text-lg font-black text-slate-800">Your Basket</h2></div>
+                                        {items.length === 0 ? (
+                                            <div className="p-16 text-center">
+                                                <div className="text-4xl mb-4">🛒</div>
+                                                <div className="font-bold text-slate-400">Empty Basket</div>
+                                                <button className="btn-primary mt-6" onClick={() => navigate('/products')}>Browse Store</button>
                                             </div>
                                         ) : (
-                                            <div>
-                                                <label className="label"><Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />Frequency</label>
-                                                <select className="input" value={frequency} onChange={e => setFrequency(e.target.value)}>
-                                                    <option value="daily">Daily</option>
-                                                    <option value="weekly">Weekly</option>
+                                            <div className="divide-y divide-slate-50">
+                                                {items.map((item) => (
+                                                    <div key={item.id} className="p-5 flex items-center gap-4 hover:bg-slate-50/50 transition-all group">
+                                                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition-transform">
+                                                            {item.category === 'Milk' ? '🥛' : item.category === 'Curd' ? '🫙' : '🧈'}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="font-black text-slate-900 leading-tight">{item.name}</div>
+                                                            <div className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{item.size_label}</div>
+                                                        </div>
+                                                        <div className="flex items-center bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
+                                                            <button onClick={() => updateQty(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-100 text-slate-500"><Minus size={14} /></button>
+                                                            <span className="w-8 text-center font-black text-slate-900 text-sm">{item.quantity}</span>
+                                                            <button onClick={() => updateQty(item.id, item.quantity + 1)} className="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-blue-200"><Plus size={14} /></button>
+                                                        </div>
+                                                        <div className="text-right min-w-[70px]">
+                                                            <div className="font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</div>
+                                                        </div>
+                                                        <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18} /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {step === 2 && (
+                                <motion.div key="step2" initial="hidden" animate="visible" exit={{ opacity: 0, x: -10 }} variants={containerVariants} className="card p-8 space-y-8 border-slate-100 shadow-xl shadow-slate-200/30">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
+                                                <MapPin size={12} /> Full Delivery Address
+                                            </label>
+                                            <textarea className="input h-28 resize-none font-bold" value={address} onChange={e => setAddress(e.target.value)} required />
+                                        </div>
+                                        <div className="space-y-6">
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
+                                                    <Navigation size={12} /> Google Maps Pin Link
+                                                </label>
+                                                <input className="input !py-4 font-bold" type="url" value={mapsUrl} onChange={e => setMapsUrl(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
+                                                    <MessageSquare size={12} /> Delivery Notes
+                                                </label>
+                                                <input className="input !py-4 font-bold" type="text" placeholder="Gate code, door color..." value={instructions} onChange={e => setInstructions(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-50">
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Time Slot</label>
+                                            <select className="input !py-4 font-bold" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
+                                                <option value="morning">🌅 Morning (Before 7 AM)</option>
+                                                <option value="evening">🌆 Evening (After 5 PM)</option>
+                                            </select>
+                                        </div>
+                                        {orderType === 'one-time' ? (
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select Delivery Date</label>
+                                                <input className="input !py-4 font-bold" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} min={minDateStr} />
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Frequency</label>
+                                                <select className="input !py-4 font-bold" value={frequency} onChange={e => setFrequency(e.target.value)}>
+                                                    <option value="daily">Every Day</option>
                                                     <option value="alternate">Alternate Days</option>
+                                                    <option value="weekly">Once a Week</option>
                                                 </select>
                                             </div>
                                         )}
-                                        <div>
-                                            <label className="label">Delivery Slot</label>
-                                            <select className="input" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
-                                                <option value="morning">Morning (Before 7 AM)</option>
-                                                <option value="evening">Evening (After 5 PM)</option>
-                                            </select>
-                                        </div>
                                     </div>
-                                    {/* Persistent cutoff schedule reminder */}
-                                    <div style={{ padding: '0.75rem 1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.78rem', color: '#64748b', marginTop: '0.5rem' }}>
-                                        ⏰ Cut-offs: <strong>Morning</strong> by 3:30 PM prev. day · <strong>Evening</strong> by 7:30 PM same day
-                                    </div>
-                                    {/* Warning when cutoff has been missed */}
-                                    {cutoffWarning && (
-                                        <div style={{ padding: '0.875rem 1rem', background: '#fffbeb', color: '#92400e', borderRadius: 8, fontSize: '0.8125rem', border: '1px solid #fde68a', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                                            <span style={{ flexShrink: 0 }}>⚠️</span>
+                                </motion.div>
+                            )}
+
+                            {step === 3 && (
+                                <motion.div key="step3" initial="hidden" animate="visible" exit={{ opacity: 0, x: -10 }} variants={containerVariants} className="space-y-6">
+                                    <div className="card p-8 border-slate-100 shadow-xl shadow-slate-200/30">
+                                        <h2 className="text-xl font-black text-slate-900 mb-8">Confirm & Pay</h2>
+                                        
+                                        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-8">
                                             <div>
-                                                <strong>Cut-off Passed:</strong> {cutoffWarning}{' '}
-                                                {orderType === 'one-time'
-                                                    ? 'The earliest available date has been updated below.'
-                                                    : 'Your subscription will begin from the next available delivery cycle.'}
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Available Balance</div>
+                                                <div className={`text-4xl font-black ${walletBalance < total && orderType !== 'subscription' ? 'text-red-500' : 'text-blue-600'}`}>
+                                                    {formatCurrency(walletBalance)}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {step === 3 && (
-                            <div className="card">
-                                <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Final Confirmation</h2>
-
-                                <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                        <div style={{ fontWeight: 600, color: '#475569' }}>My Prepaid Balance</div>
-                                        <div style={{ fontWeight: 800, fontSize: '1.25rem', color: walletBalance >= total || orderType === 'subscription' ? '#059669' : '#dc2626' }}>
-                                            {formatCurrency(walletBalance)}
-                                        </div>
-                                    </div>
-
-                                    {orderType === 'subscription' && !hasActiveAppFee ? (
-                                        <div style={{ fontSize: '0.875rem', color: '#dc2626', background: '#fee2e2', padding: '1rem', borderRadius: 8 }}>
-                                            ❌ <strong>Monthly Subscription Required.</strong> Daily milk subscriptions are only available to users with an active ₹150 monthly app membership. Please subscribe in Settings first.
-                                        </div>
-                                    ) : orderType === 'subscription' ? (
-                                        <div style={{ fontSize: '0.875rem', color: '#64748b', background: '#eff6ff', padding: '1rem', borderRadius: 8 }}>
-                                            ℹ️ <strong>Subscriptions are deducted daily upon delivery.</strong> Make sure you keep your wallet funded so morning deliveries are not interrupted. You will not be charged right now.
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {walletBalance < total ? (
-                                                <div style={{ fontSize: '0.875rem', color: '#dc2626', background: '#fee2e2', padding: '1rem', borderRadius: 8 }}>
-                                                    ❌ Insufficient funds. Please add at least <strong>{formatCurrency(total - walletBalance)}</strong> to your wallet to place this one-time order.
+                                            
+                                            {orderType === 'subscription' ? (
+                                                <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-500 max-w-xs leading-relaxed">
+                                                    ℹ️ Subscriptions are auto-deducted daily. No charge is made right now. Keep your wallet funded for uninterrupted service.
                                                 </div>
                                             ) : (
-                                                <div style={{ fontSize: '0.875rem', color: '#166534', background: '#f0fdf4', padding: '1rem', borderRadius: 8 }}>
-                                                    ✅ Sufficient funds available. <strong>{formatCurrency(total)}</strong> will be deducted from your wallet immediately.
-                                                </div>
+                                                walletBalance < total && (
+                                                    <button onClick={() => navigate('/wallet')} className="btn-secondary !text-blue-600 !border-blue-100 whitespace-nowrap">
+                                                        <Plus size={16} /> Recharge Wallet
+                                                    </button>
+                                                )
                                             )}
-                                        </>
-                                    )}
-                                </div>
+                                        </div>
 
-                                {walletBalance < total && orderType !== 'subscription' && (
-                                    <button className="btn-secondary" onClick={() => navigate('/billing')} style={{ width: '100%', justifyContent: 'center', marginBottom: '1rem' }}>
-                                        <Plus size={16} /> Add Funds to Wallet
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                                        {orderType === 'subscription' && !hasActiveAppFee && (
+                                            <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 text-sm font-bold flex gap-3">
+                                                <Clock className="flex-shrink-0" /> Monthly App Access required for daily scheduling. Please subscribe in Profile.
+                                            </div>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
 
-                    {/* Order Summary */}
-                    <div>
-                        <div className="card" style={{ position: 'sticky', top: 80 }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem' }}>Order Summary</h3>
-                            {items.map((item) => (
-                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
-                                    <span style={{ color: '#64748b' }}>{item.name} × {item.quantity}</span>
-                                    <span style={{ fontWeight: 600 }}>{formatCurrency(item.price * item.quantity)}</span>
-                                </div>
-                            ))}
+                    {/* Right Panel: Order Summary */}
+                    <div className="lg:col-span-4 lg:sticky lg:top-24">
+                        <div className="card p-8 border-slate-100 shadow-2xl shadow-slate-200/40 space-y-6">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-50 pb-4">Check Summary</h3>
+                            
+                            <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2 no-scrollbar">
+                                {items.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-start text-sm">
+                                        <div className="text-slate-500 font-bold max-w-[180px]">
+                                            {item.name} <span className="text-slate-400 font-medium">× {item.quantity}</span>
+                                        </div>
+                                        <div className="font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</div>
+                                    </div>
+                                ))}
+                            </div>
 
-                            <div style={{ borderTop: '1px solid #f1f5f9', margin: '1rem 0', paddingTop: '1rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Subtotal</span>
-                                    <span style={{ fontSize: '0.875rem', color: '#475569', fontWeight: 600 }}>{formatCurrency(subtotal)}</span>
+                            <div className="pt-6 border-t border-slate-100 space-y-3">
+                                <div className="flex justify-between text-xs font-bold">
+                                    <span className="text-slate-400 uppercase">Subtotal</span>
+                                    <span className="text-slate-900">{formatCurrency(subtotal)}</span>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Delivery</span>
-                                    <span style={{ fontSize: '0.875rem', color: deliveryFee > 0 ? '#ef4444' : '#059669', fontWeight: 600 }}>
-                                        {deliveryFee > 0 ? formatCurrency(deliveryFee) : 'Free'}
+                                <div className="flex justify-between text-xs font-bold">
+                                    <span className="text-slate-400 uppercase">Delivery Fee</span>
+                                    <span className={deliveryFee > 0 ? 'text-red-500' : 'text-emerald-500'}>
+                                        {deliveryFee > 0 ? formatCurrency(deliveryFee) : 'FREE'}
                                     </span>
                                 </div>
                                 {deliveryFee > 0 && (
-                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                                        (₹20 fee applies without an active ₹150 monthly subscription)
-                                    </div>
+                                    <p className="text-[9px] text-slate-400 font-medium leading-tight">₹20 fee applies for users without active monthly access.</p>
                                 )}
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                                <span style={{ fontWeight: 700, color: '#0f172a' }}>Total</span>
-                                <span style={{ fontWeight: 800, color: '#2563eb', fontSize: '1.125rem' }}>{formatCurrency(total)}</span>
+                            <div className="pt-6 border-t-2 border-dashed border-slate-100 flex justify-between items-end mb-8">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Total Amount</div>
+                                <div className="text-3xl font-black text-blue-600 leading-none">{formatCurrency(total)}</div>
                             </div>
 
-                            {step === 1 && (
-                                <button className="btn-primary" onClick={() => { if (items.length === 0) { toast.error('List is empty'); return } setStep(2) }} style={{ width: '100%', justifyContent: 'center' }}>
-                                    Fill Delivery Details →
-                                </button>
-                            )}
-                            {step === 2 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <button
-                                        className="btn-primary"
-                                        onClick={() => {
-                                            if (!address) { toast.error('Enter delivery address'); return }
-                                            if (cutoffWarning) {
-                                                toast(
-                                                    (t) => (
-                                                        <span style={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
-                                                            <strong>⚠️ Reminder: Cut-off passed</strong><br />
-                                                            {cutoffWarning} Your delivery date has been adjusted.
-                                                        </span>
-                                                    ),
-                                                    { duration: 5000, style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' } }
-                                                )
-                                            }
-                                            setStep(3)
-                                        }}
-                                        style={{ width: '100%', justifyContent: 'center' }}
-                                    >
-                                        Continue to Payment →
+                            <div className="space-y-3">
+                                {step === 1 && (
+                                    <button onClick={() => { if (items.length) setStep(2); else toast.error('Basket is empty') }} className="btn-primary w-full !py-4.5 shadow-xl shadow-blue-500/20 group">
+                                        Shipment Details <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                     </button>
-                                    <button className="btn-secondary" onClick={() => setStep(1)} style={{ width: '100%', justifyContent: 'center' }}>← Back to Selected Items</button>
-                                </div>
-                            )}
-                            {step === 3 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <button
-                                        className="btn-primary"
-                                        onClick={handlePayment}
-                                        disabled={payLoading || (orderType === 'subscription' && !hasActiveAppFee) || (walletBalance < total && orderType !== 'subscription')}
-                                        style={{ width: '100%', justifyContent: 'center' }}
-                                    >
-                                        <CreditCard size={16} />
-                                        {payLoading ? 'Processing...' : orderType === 'subscription' ? 'Confirm Subscription' : `Pay ${formatCurrency(total)}`}
-                                    </button>
-                                    <button className="btn-secondary" onClick={() => setStep(2)} style={{ width: '100%', justifyContent: 'center' }}>← Back</button>
-                                </div>
-                            )}
+                                )}
+                                {step === 2 && (
+                                    <>
+                                        <button onClick={() => { if (!address) toast.error('Enter address'); else setStep(3) }} className="btn-primary w-full !py-4.5 shadow-xl shadow-blue-500/20 group">
+                                            Confirm Order <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                                        </button>
+                                        <button onClick={() => setStep(1)} className="btn-secondary w-full !py-4 border-none text-slate-400 flex items-center justify-center gap-2">
+                                            <ArrowLeft size={16} /> Back to basket
+                                        </button>
+                                    </>
+                                )}
+                                {step === 3 && (
+                                    <>
+                                        <button
+                                            onClick={handlePayment}
+                                            disabled={payLoading || (orderType === 'subscription' && !hasActiveAppFee) || (walletBalance < total && orderType !== 'subscription')}
+                                            className="btn-primary w-full !py-5 shadow-2xl shadow-blue-500/30 font-black tracking-tight"
+                                        >
+                                            {payLoading ? 'Synchronizing...' : orderType === 'subscription' ? 'Confirm Daily Schedule' : `Pay ${formatCurrency(total)} Now`}
+                                        </button>
+                                        <button onClick={() => setStep(2)} className="btn-secondary w-full !py-4 border-none text-slate-400 flex items-center justify-center gap-2">
+                                            <ArrowLeft size={16} /> Edit Shipment
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     )
 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nandini-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-13",
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "nandini-assets"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nandini_db",
+      "database_id": "0d162e7c-aa22-43aa-942c-b2bdb2e199fc"
+    }
+  ]
+}

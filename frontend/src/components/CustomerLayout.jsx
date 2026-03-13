@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutGrid, FileText, IndianRupee, AlignRight, ShoppingBag, ShoppingCart, RefreshCw } from 'lucide-react'
+import { LayoutGrid, FileText, IndianRupee, MapPin, ShoppingBag, ShoppingCart, RefreshCw, User } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useCartStore } from '../store'
 
 export default function CustomerLayout({ children }) {
@@ -9,82 +10,65 @@ export default function CustomerLayout({ children }) {
 
     const tabs = [
         { name: 'Home', path: '/dashboard', icon: LayoutGrid },
-        { name: 'Products', path: '/products', icon: ShoppingBag },
-        { name: 'Daily Setup', path: '/subscriptions', icon: RefreshCw },
-        { name: 'Confirm', path: '/order', icon: ShoppingCart },
-        { name: 'History', path: '/reports', icon: FileText },
-        { name: 'Balance', path: '/payment', icon: IndianRupee },
-        { name: 'Profile', path: '/profile', icon: AlignRight }
+        { name: 'Store', path: '/products', icon: ShoppingBag },
+        { name: 'Daily', path: '/subscriptions', icon: RefreshCw },
+        { name: 'Cart', path: '/order', icon: ShoppingCart },
+        { name: 'Wallet', path: '/wallet', icon: IndianRupee },
+        { name: 'Profile', path: '/profile', icon: User }
     ]
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc', overflow: 'hidden' }}>
-            {/* Main scrollable content area */}
-            <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '70px' }}>
+        <div className="flex flex-col min-h-screen bg-slate-50">
+            {/* Main Content Area */}
+            <main className="flex-1 pb-24 md:pb-0 overflow-x-hidden">
                 {children}
             </main>
 
-            {/* Bottom navigation bar */}
-            <nav style={{
-                position: 'fixed',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '65px',
-                background: 'white',
-                borderTop: '1px solid #e2e8f0',
-                display: 'flex',
-                justifyContent: 'space-around',
-                alignItems: 'center',
-                boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
-                zIndex: 100
-            }}>
+            {/* Bottom Navigation (Mobile Only) */}
+            <nav className="fixed bottom-4 left-4 right-4 h-16 glass border border-white/50 rounded-2xl md:hidden flex items-center justify-around px-2 shadow-2xl shadow-blue-500/10 z-[100]">
                 {tabs.map((tab) => {
                     const isActive = location.pathname.startsWith(tab.path)
                     const Icon = tab.icon
+                    
                     return (
                         <Link
                             key={tab.name}
                             to={tab.path}
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                textDecoration: 'none',
-                                color: isActive ? 'var(--color-primary)' : '#64748b',
-                                flex: 1,
-                                height: '100%',
-                                gap: '0.25rem',
-                                minWidth: 0 // To allow text truncation
-                            }}
+                            className="relative flex flex-col items-center justify-center flex-1 h-full py-1 group"
                         >
-                            <div style={{ position: 'relative', display: 'flex' }}>
-                                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                                {tab.name === 'Confirm' && cartCount > 0 && (
-                                    <span style={{
-                                        position: 'absolute', top: -5, right: -8,
-                                        background: '#2563eb', color: 'white', borderRadius: '50%',
-                                        width: 14, height: 14, fontSize: 9, fontWeight: 700,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>{cartCount}</span>
+                            <div className="relative flex flex-col items-center gap-1">
+                                {isActive && (
+                                    <motion.div 
+                                        layoutId="activeTab"
+                                        className="absolute -inset-x-4 -inset-y-1 bg-blue-500/10 rounded-xl"
+                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                    />
                                 )}
+                                
+                                <div className={`relative z-10 ${isActive ? 'text-blue-600' : 'text-slate-400 group-active:scale-95 transition-all'}`}>
+                                    <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                                    {tab.name === 'Cart' && cartCount > 0 && (
+                                        <motion.span 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white"
+                                        >
+                                            {cartCount}
+                                        </motion.span>
+                                    )}
+                                </div>
+                                <span className={`text-[9px] font-bold tracking-tight uppercase relative z-10 transition-colors ${isActive ? 'text-blue-600' : 'text-slate-400'}`}>
+                                    {tab.name}
+                                </span>
                             </div>
-                            <span style={{
-                                fontSize: '0.6rem',
-                                fontWeight: isActive ? 600 : 500,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                maxWidth: '100%',
-                                padding: '0 2px'
-                            }}>
-                                {tab.name}
-                            </span>
                         </Link>
                     )
                 })}
             </nav>
+
+            {/* Safety spacer for iOS home indicator */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 h-4 bg-white/5 backdrop-blur-sm pointer-events-none z-[99]"></div>
         </div>
     )
 }
+

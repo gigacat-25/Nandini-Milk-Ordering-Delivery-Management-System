@@ -139,16 +139,15 @@ export default function AdminCustomers() {
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Customer</th>
-                                    <th>Contact</th>
-                                    <th>Clerk ID</th>
-                                    <th>App Access</th>
-                                    <th>Milk Subs</th>
-                                    <th>Total Orders</th>
-                                    <th>Total Spent</th>
-                                    <th>Wallet Amount</th>
-                                    <th>Joined</th>
-                                    <th></th>
+                                    <th className="text-left w-[20%]">Customer</th>
+                                    <th className="text-left w-[20%]">Contact</th>
+                                    <th className="text-center">App Access</th>
+                                    <th className="text-center">Active Subs</th>
+                                    <th className="text-center">Orders</th>
+                                    <th className="text-right">Spent</th>
+                                    <th className="text-right">Wallet</th>
+                                    <th className="text-center">Joined</th>
+                                    <th className="w-[80px]"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -172,20 +171,19 @@ export default function AdminCustomers() {
                                             <div style={{ fontSize: '0.8125rem', color: '#374151' }}>{c.phone || 'N/A'}</div>
                                             <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.email || 'N/A'}</div>
                                         </td>
-                                        <td style={{ fontSize: '0.8125rem', color: '#64748b', maxWidth: 160 }}>{c.id.substring(0, 10)}...</td>
-                                        <td>
+                                        <td className="text-center">
                                             <span className={c.hasAppAccess ? 'badge-success' : 'badge-warning'}>{c.hasAppAccess ? 'Active' : 'Expired'}</span>
                                         </td>
-                                        <td>
+                                        <td className="text-center">
                                             <span className={c.active_subscriptions > 0 ? 'badge-blue' : 'badge-gray'}>{c.active_subscriptions} active</span>
                                         </td>
-                                        <td style={{ fontWeight: 600 }}>{c.total_orders}</td>
-                                        <td style={{ fontWeight: 700, color: '#2563eb' }}>{formatCurrency(c.total_spent)}</td>
-                                        <td style={{ fontWeight: 700, color: '#059669' }}>{formatCurrency(c.wallet_balance || 0)}</td>
-                                        <td style={{ color: '#64748b', fontSize: '0.8125rem' }}>{formatDate(c.created_at)}</td>
-                                        <td>
-                                            <button className="btn-secondary" style={{ padding: '0.375rem 0.625rem', fontSize: '0.8125rem' }} onClick={() => setSelected(c)}>
-                                                <Eye size={14} />
+                                        <td className="text-center font-bold">{c.total_orders}</td>
+                                        <td className="text-right font-bold text-blue-600">{formatCurrency(c.total_spent)}</td>
+                                        <td className="text-right font-bold text-emerald-600 bg-emerald-50/50 px-3 py-1 rounded-lg inline-block">{formatCurrency(c.wallet_balance || 0)}</td>
+                                        <td className="text-center font-medium text-slate-500">{formatDate(c.created_at)}</td>
+                                        <td className="text-right">
+                                            <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors" title="View Details" onClick={() => setSelected(c)}>
+                                                <Eye size={18} />
                                             </button>
                                         </td>
                                     </tr>

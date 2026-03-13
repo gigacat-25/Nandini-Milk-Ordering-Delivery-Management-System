@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Milk, CheckCircle, Clock, Truck, Star, ChevronRight, Menu, Play, Users, MapPin } from 'lucide-react'
+import { Milk, CheckCircle, Clock, Truck, Star, ChevronRight, Menu, Play, Users, MapPin, Sparkles, ShieldCheck, Zap } from 'lucide-react'
 import { useState, useRef } from 'react'
 import { useUser } from '@clerk/clerk-react'
 import { useProducts } from '../lib/useData'
@@ -14,184 +14,173 @@ import 'swiper/css/pagination'
 import 'swiper/css/effect-fade'
 
 const features = [
-    { icon: Clock, title: 'Daily Fresh Delivery', desc: 'Get fresh Nandini milk delivered every morning before 7 AM.' },
-    { icon: CheckCircle, title: 'Flexible Subscriptions', desc: 'Pause or skip any day. No cancellation fees. Full control.' },
-    { icon: Truck, title: 'Vaderhalli Coverage', desc: 'Serving all areas of Vaderhalli, Bengaluru and nearby.' },
+    { icon: Clock, title: 'Reliable Timing', desc: 'Rain or shine, our delivery partners reach you before 7 AM every morning.', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { icon: Zap, title: 'Smart Subscriptions', desc: 'Pause, resume, or modify your daily milk order with a single tap.', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { icon: ShieldCheck, title: 'Secure Payments', desc: 'Prepaid wallet system with UPI support for seamless transactions.', color: 'text-purple-600', bg: 'bg-purple-50' },
 ]
 
 const testimonials = [
-    { name: 'Priya S.', text: 'Never missed a day! Fresh milk delivered perfectly. Love the app.', stars: 5 },
-    { name: 'Ravi K.', text: 'Pausing during vacation is so easy. Great service!', stars: 5 },
-    { name: 'Meena N.', text: 'Best Nandini store nearby. Very reliable delivery.', stars: 5 },
+    { name: 'Priya S.', text: 'Never missed a day! Fresh milk delivered perfectly. Love the app.', stars: 5, role: 'Vaderhalli Resident' },
+    { name: 'Ravi K.', text: 'Pausing during vacation is so easy. Great service!', stars: 5, role: 'Software Engineer' },
+    { name: 'Meena N.', text: 'Best Nandini store nearby. Very reliable delivery.', stars: 5, role: 'Homemaker' },
 ]
 
 export default function LandingPage() {
     const { isSignedIn, user } = useUser()
     const { data: products } = useProducts()
     const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress === 'thejaswinp6@gmail.com')
-    const [menuOpen, setMenuOpen] = useState(false)
 
-    const featuredProducts = (products || []).slice(0, 4)
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+    }
+
+    const itemVariants = {
+        hidden: { y: 30, opacity: 0 },
+        visible: { y: 0, opacity: 1, transition: { duration: 0.8, ease: "easeOut" } }
+    }
 
     return (
-        <div style={{ minHeight: '100vh', background: 'white', overflowX: 'hidden' }}>
-            <style>{`
-                .swiper-pagination-bullet-active { background: #2563eb !important; }
-                .hero-gradient { background: radial-gradient(circle at top right, #dbeafe 0%, transparent 40%), radial-gradient(circle at bottom left, #eff6ff 0%, transparent 40%); }
-                @media (max-width: 640px) { .mobile-hide { display: none !important; } }
-            `}</style>
-
+        <div className="min-h-screen bg-white overflow-x-hidden selection:bg-blue-100 selection:text-blue-900">
             {/* Nav */}
-            <nav style={{
-                padding: '1rem 1.5rem', display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9',
-                position: 'sticky', top: 0, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', zIndex: 100,
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} style={{
-                        width: 40, height: 40, background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                        borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                        <Milk size={22} color="white" />
-                    </motion.div>
-                    <div className="mobile-hide">
-                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Nandini Milk</div>
-                        <div style={{ fontSize: '0.6875rem', color: '#64748b', fontWeight: 600 }}>Vaderhalli Store</div>
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    {isSignedIn ? (
-                        <Link to={isAdmin ? '/admin' : '/dashboard'} className="btn-primary" style={{ textDecoration: 'none', padding: '0.6rem 1.25rem' }}>
-                            Go to Dashboard
-                        </Link>
-                    ) : (
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <Link to="/auth" className="btn-secondary" style={{ textDecoration: 'none', padding: '0.6rem 1.25rem', border: 'none' }}>Login</Link>
-                            <Link to="/auth?signup=1" className="btn-primary" style={{ textDecoration: 'none', boxShadow: '0 8px 16px -4px rgba(37,99,235,0.4)', padding: '0.6rem 1.25rem' }}>Join Now</Link>
+            <nav className="fixed top-0 left-0 right-0 z-[100] px-4 py-4">
+                <div className="max-w-7xl mx-auto glass rounded-2xl border border-white/40 shadow-xl shadow-blue-900/5 px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <motion.div 
+                            initial={{ rotate: -20, scale: 0 }}
+                            animate={{ rotate: 0, scale: 1 }}
+                            className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20"
+                        >
+                            <Milk size={20} className="text-white" />
+                        </motion.div>
+                        <div className="hidden sm:block">
+                            <div className="text-sm font-black text-slate-900 leading-none">Nandini Milk</div>
+                            <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Vaderhalli Store</div>
                         </div>
-                    )}
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        {isSignedIn ? (
+                            <Link to={isAdmin ? '/admin' : '/dashboard'} className="btn-primary !rounded-xl !py-2.5 !px-6 shadow-xl shadow-blue-500/10">
+                                My Dashboard
+                            </Link>
+                        ) : (
+                            <>
+                                <Link to="/auth" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">Log In</Link>
+                                <Link to="/auth?signup=1" className="btn-primary !rounded-xl !py-2.5 !px-6 shadow-xl shadow-blue-500/20">
+                                    Get Started
+                                </Link>
+                            </>
+                        )}
+                    </div>
                 </div>
             </nav>
 
             {/* Hero Section */}
-            <section className="hero-gradient" style={{ padding: '4rem 1.5rem', position: 'relative' }}>
-                <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="badge-blue"
-                        style={{ padding: '0.5rem 1.25rem', fontSize: '0.875rem', marginBottom: '1.5rem', borderRadius: 24, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                    >
-                        <span style={{ fontSize: '1.25rem' }}>🥛</span> Serving Vaderhalli Daily
+            <section className="relative pt-40 pb-20 px-4 overflow-hidden">
+                {/* Background Decorations */}
+                <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-blue-50 rounded-full blur-[120px] -mr-96 -mt-96 opacity-60"></div>
+                <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-50 rounded-full blur-[100px] -ml-72 -mb-72 opacity-40"></div>
+                
+                <motion.div 
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="max-w-7xl mx-auto text-center"
+                >
+                    <motion.div variants={itemVariants} className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest mb-8 border border-blue-100 shadow-sm shadow-blue-100/50">
+                        <Sparkles size={14} className="animate-pulse" /> Serving Vaderhalli Residents
                     </motion.div>
                     
-                    <motion.h1 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        style={{ fontSize: 'clamp(2.5rem, 8vw, 4.5rem)', fontWeight: 900, color: '#0f172a', lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: '1.5rem' }}
-                    >
+                    <motion.h1 variants={itemVariants} className="text-5xl md:text-8xl font-black text-slate-900 tracking-tight leading-[0.9] mb-8">
                         Fresh Milk.<br />
-                        <span style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Right at Your Door.</span>
+                        <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent italic">Right at Your Door.</span>
                     </motion.h1>
 
-                    <motion.p 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        style={{ fontSize: '1.25rem', color: '#475569', maxWidth: 600, marginBottom: '2.5rem', lineHeight: 1.6 }}
-                    >
-                        The smartest way to get your morning Nandini milk. 
-                        Pause, resume, or change your daily order with one tap.
+                    <motion.p variants={itemVariants} className="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
+                        The smarter way to manage your morning essentials. 
+                        Subscribe once, enjoy fresh quality every single morning before 7 AM.
                     </motion.p>
 
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}
-                    >
-                        <Link to="/auth?signup=1" className="btn-primary" style={{ textDecoration: 'none', padding: '1.25rem 2.5rem', fontSize: '1.125rem', borderRadius: 16 }}>
-                            Start Daily Milk <ChevronRight size={20} />
+                    <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <Link to="/auth?signup=1" className="btn-primary !py-5 !px-10 !text-lg !rounded-2xl shadow-2xl shadow-blue-600/20 group">
+                            Start My Subscription <ChevronRight className="group-hover:translate-x-1 transition-transform" />
                         </Link>
-                        <Link to="/products" className="btn-secondary" style={{ textDecoration: 'none', padding: '1.25rem 2.5rem', fontSize: '1.125rem', borderRadius: 16 }}>
-                            Browse Items
+                        <Link to="/products" className="btn-secondary !py-5 !px-10 !text-lg !rounded-2xl !bg-white">
+                            View Price List
                         </Link>
                     </motion.div>
 
-                    <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.5 }}
-                        style={{ display: 'flex', gap: '2rem', marginTop: '4rem', color: '#94a3b8', fontSize: '0.875rem', fontWeight: 600, flexWrap: 'wrap', justifyContent: 'center' }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} color="#22c55e" /> No Setup Fees</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} color="#22c55e" /> UPI Payments</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} color="#22c55e" /> 7AM Delivery</div>
+                    {/* Trust Indicators */}
+                    <motion.div variants={itemVariants} className="mt-20 flex flex-wrap justify-center gap-8 md:gap-16 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+                        <div className="flex items-center gap-2 font-black text-slate-400">
+                            <CheckCircle size={20} className="text-emerald-500" /> NO SETUP FEES
+                        </div>
+                        <div className="flex items-center gap-2 font-black text-slate-400">
+                            <CheckCircle size={20} className="text-emerald-500" /> UPI INTEGRATED
+                        </div>
+                        <div className="flex items-center gap-2 font-black text-slate-400">
+                            <CheckCircle size={20} className="text-emerald-500" /> CANCEL ANYTIME
+                        </div>
                     </motion.div>
-                </div>
+                </motion.div>
             </section>
 
-            {/* Why section with entrance animation */}
-            <section style={{ padding: '6rem 1.5rem' }}>
-                <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-                        {[
-                            { icon: Clock, title: 'Reliable Timing', desc: 'Rain or shine, our delivery partners reach you before 7 AM every morning.', color: '#3b82f6', bg: '#eff6ff' },
-                            { icon: CheckCircle, title: 'Full Control', desc: 'Going on vacation? Pause your milk in one click. No calls needed.', color: '#10b981', bg: '#ecfdf5' },
-                            { icon: MapPin, title: 'Localized Care', desc: 'We are part of Vaderhalli. We know these streets and your needs.', color: '#f59e0b', bg: '#fffbeb' },
-                        ].map((item, i) => (
+            {/* Features Bridge */}
+            <section className="py-24 px-4 bg-slate-50/50">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {features.map((f, i) => (
                             <motion.div 
-                                viewport={{ once: true }}
-                                initial={{ opacity: 0, y: 30 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                transition={{ delay: i * 0.1 }}
-                                key={item.title} 
-                                style={{ padding: '2.5rem', borderRadius: 24, border: '1px solid #f1f5f9', background: 'white' }}
+                                key={f.title}
+                                whileHover={{ y: -10 }}
+                                className="card bg-white p-10 rounded-[40px] border-none shadow-xl shadow-slate-200/50 group"
                             >
-                                <div style={{ width: 64, height: 64, borderRadius: 18, background: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', color: item.color }}>
-                                    <item.icon size={32} />
+                                <div className={`w-16 h-16 ${f.bg} ${f.color} rounded-3xl flex items-center justify-center mb-8 transition-transform group-hover:rotate-6 group-hover:scale-110`}>
+                                    <f.icon size={32} />
                                 </div>
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem' }}>{item.title}</h3>
-                                <p style={{ fontSize: '1.125rem', color: '#64748b', lineHeight: 1.6 }}>{item.desc}</p>
+                                <h3 className="text-2xl font-black text-slate-900 mb-4">{f.title}</h3>
+                                <p className="text-slate-500 font-medium leading-relaxed">{f.desc}</p>
                             </motion.div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* Carousel Section */}
-            <section style={{ padding: '6rem 1.5rem', background: '#f8fafc' }}>
-                <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-                        <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a', marginBottom: '1rem' }}>Trusted by Neighbors</h2>
-                        <p style={{ fontSize: '1.25rem', color: '#64748b' }}>Here is what Vaderhalli residents have to say</p>
+            {/* Testimonials */}
+            <section className="py-24 px-4 overflow-hidden">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-16">
+                        <span className="text-blue-600 text-xs font-black uppercase tracking-[0.3em]">Neighborhood Love</span>
+                        <h2 className="text-4xl md:text-5xl font-black text-slate-900 mt-4 tracking-tight">Trusted by your neighbors</h2>
                     </div>
-                    
+
                     <Swiper
                         modules={[Autoplay, Pagination]}
-                        spaceBetween={24}
+                        spaceBetween={32}
                         slidesPerView={1}
-                        autoplay={{ delay: 3000 }}
+                        autoplay={{ delay: 4000 }}
                         pagination={{ clickable: true }}
                         breakpoints={{
                             768: { slidesPerView: 2 },
                             1024: { slidesPerView: 3 }
                         }}
-                        style={{ paddingBottom: '3rem' }}
+                        className="pb-16"
                     >
                         {testimonials.map((t, i) => (
                             <SwiperSlide key={i}>
-                                <div style={{ background: 'white', padding: '2.5rem', borderRadius: 24, border: '1px solid #e2e8f0', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem' }}>
-                                        {[...Array(5)].map((_, i) => <Star key={i} size={16} fill="#f59e0b" color="#f59e0b" />)}
+                                <div className="card h-full flex flex-col p-8 rounded-[32px] border-slate-100 shadow-lg shadow-slate-100">
+                                    <div className="flex gap-1 mb-6">
+                                        {[...Array(5)].map((_, i) => <Star key={i} size={14} fill="#f59e0b" color="#f59e0b" />)}
                                     </div>
-                                    <p style={{ fontSize: '1.125rem', color: '#334155', lineHeight: 1.6, fontStyle: 'italic', marginBottom: '2rem', flex: 1 }}>"{t.text}"</p>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                        <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', fontWeight: 800 }}>{t.name[0]}</div>
+                                    <p className="text-lg font-bold text-slate-700 italic mb-8 flex-1 leading-relaxed">"{t.text}"</p>
+                                    <div className="flex items-center gap-4 pt-6 border-t border-slate-50">
+                                        <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-white shadow-lg">
+                                            {t.name[0]}
+                                        </div>
                                         <div>
-                                            <div style={{ fontWeight: 800, color: '#0f172a' }}>{t.name}</div>
-                                            <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Verified Customer</div>
+                                            <div className="font-black text-slate-900">{t.name}</div>
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t.role}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -201,47 +190,57 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* Newsletter/CTA */}
-            <section style={{ padding: '6rem 1.5rem' }}>
+            {/* Final CTA */}
+            <section className="py-24 px-4">
                 <motion.div 
-                    viewport={{ once: true }}
                     initial={{ opacity: 0, scale: 0.95 }}
                     whileInView={{ opacity: 1, scale: 1 }}
-                    style={{ 
-                        maxWidth: 1100, margin: '0 auto', 
-                        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
-                        padding: '4rem 2rem', borderRadius: 40, textAlign: 'center', color: 'white',
-                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
-                    }}
+                    viewport={{ once: true }}
+                    className="max-w-7xl mx-auto rounded-[48px] overflow-hidden relative"
                 >
-                    <h2 style={{ fontSize: ' clamp(1.75rem, 5vw, 3rem)', fontWeight: 900, marginBottom: '1.5rem' }}>Never Miss Your Morning Milk</h2>
-                    <p style={{ fontSize: '1.25rem', color: '#94a3b8', maxWidth: 600, margin: '0 auto 3rem' }}>Join hundreds of families. Freshness, at your command.</p>
-                    <Link to="/auth?signup=1" className="btn-primary" style={{ background: 'white', color: '#0f172a', padding: '1.25rem 3rem', borderRadius: 20, fontSize: '1.25rem', border: 'none' }}>
-                        Create My Account
-                    </Link>
+                    <div className="absolute inset-0 bg-[#0f172a] -z-10"></div>
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-600/20 to-transparent -z-10"></div>
+                    
+                    <div className="px-8 py-20 md:py-32 text-center text-white max-w-3xl mx-auto">
+                        <h2 className="text-4xl md:text-6xl font-black mb-8 leading-[0.95] tracking-tighter">Never miss your morning milk again</h2>
+                        <p className="text-slate-400 text-lg font-medium mb-12">Join hundreds of families in Vaderhalli who start their day fresh with Nandini.</p>
+                        <Link to="/auth?signup=1" className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black text-xl shadow-2xl hover:bg-blue-50 transition-all hover:scale-105 inline-block">
+                            Create My Account
+                        </Link>
+                    </div>
                 </motion.div>
             </section>
 
             {/* Modern Footer */}
-            <footer style={{ padding: '4rem 1.5rem', borderTop: '1px solid #f1f5f9', background: '#ffffff' }}>
-                <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '2rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: 32, height: 32, background: '#2563eb', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Milk size={18} color="white" />
+            <footer className="py-20 px-4 border-t border-slate-100">
+                <div className="max-w-7xl mx-auto">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-12 mb-16">
+                        <div className="flex flex-col items-center md:items-start gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                    <Milk size={20} className="text-white" />
+                                </div>
+                                <span className="text-xl font-black tracking-tight">Nandini Vaderhalli</span>
                             </div>
-                            <span style={{ fontWeight: 800, fontSize: '1.125rem' }}>Nandini Vaderhalli</span>
+                            <p className="text-sm text-slate-400 font-medium text-center md:text-left">
+                                Official retailer of Nandini Milk & Dairy Products.<br />Serving Vaderhalli, Bangalore since 2020.
+                            </p>
                         </div>
-                        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                            <Link to="/terms" style={{ color: '#64748b', textDecoration: 'none', fontSize: '1rem', fontWeight: 500 }}>Terms</Link>
-                            <Link to="/privacy" style={{ color: '#64748b', textDecoration: 'none', fontSize: '1rem', fontWeight: 500 }}>Privacy</Link>
-                            <Link to="/products" style={{ color: '#64748b', textDecoration: 'none', fontSize: '1rem', fontWeight: 500 }}>Products</Link>
+                        
+                        <div className="flex gap-12 text-sm font-bold text-slate-400 uppercase tracking-widest">
+                            <Link to="/products" className="hover:text-blue-600 transition-colors">Prices</Link>
+                            <Link to="/terms" className="hover:text-blue-600 transition-colors">Terms</Link>
+                            <Link to="/privacy" className="hover:text-blue-600 transition-colors">Privacy</Link>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem', color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: '2rem' }}>
-                        <span>© 2026 Nandini Milk Store. Bengaluru.</span>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <span>App v2.0</span>
+                    
+                    <div className="flex flex-col md:flex-row justify-between items-center border-t border-slate-50 pt-8 gap-4">
+                        <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">
+                            © 2026 NANDINI MILK STORE • VADERHALLI, BENGALURU
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">V2.0 STABLE</span>
                         </div>
                     </div>
                 </div>
@@ -249,3 +248,4 @@ export default function LandingPage() {
         </div>
     )
 }
+
