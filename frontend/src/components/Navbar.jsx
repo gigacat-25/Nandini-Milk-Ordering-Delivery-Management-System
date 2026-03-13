@@ -18,6 +18,7 @@ export default function Navbar() {
         ? [
             { to: '/admin', label: 'Dashboard' },
             { to: '/admin/customers', label: 'Customers' },
+            { to: '/admin/subscriptions', label: 'Subscriptions' },
             { to: '/admin/products', label: 'Products' },
             { to: '/admin/delivery', label: 'Delivery' },
             { to: '/admin/analytics', label: 'Analytics' },

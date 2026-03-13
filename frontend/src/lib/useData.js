@@ -525,3 +525,14 @@ export async function endDeliverySession(dateStr, slot) {
     if (error) throw error
     return data
 }
+
+export async function toggleSubscriptionStatus(subscriptionId, customerId, newStatus) {
+    const { error } = await supabase
+        .from('subscriptions')
+        .update({ status: newStatus })
+        .eq('id', subscriptionId)
+        .eq('customer_id', customerId)
+        
+    if (error) throw error
+    return true
+}

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ShoppingBag, RefreshCw, Truck, IndianRupee, ChevronRight, Package } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
-import { useOrders, useSubscriptions, usePartialSkips } from '../../lib/useData'
+import { useOrders, useSubscriptions, usePartialSkips, useUserProfile } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 
@@ -11,6 +11,7 @@ export default function CustomerDashboard() {
     const { data: subsData, loading: subsLoading } = useSubscriptions(user?.id)
     const todayDateStr = new Date().toISOString().split('T')[0]
     const { data: partialSkips, loading: skipsLoading } = usePartialSkips(todayDateStr)
+    const { data: profile, loading: profileLoading } = useUserProfile(user?.id)
 
     const todayDeliveries = (subsData || []).filter(s => s.status === 'active').map(s => {
         const activeItems = s.items?.filter(i => !partialSkips?.some(ps => ps.target_id === s.id && ps.product_id === i.product_id)) || []
@@ -24,7 +25,9 @@ export default function CustomerDashboard() {
         return sum + subTotal * 30
     }, 0)
 
-    if (!isLoaded || ordersLoading || subsLoading || skipsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading dashboard...</div>
+    if (!isLoaded || ordersLoading || subsLoading || skipsLoading || profileLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading your dashboard...</div>
+
+    const walletBalance = profile?.wallet_balance || 0
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -40,22 +43,52 @@ export default function CustomerDashboard() {
                     </p>
                 </div>
 
-                {/* Quick Stats */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-                    {[
-                        { icon: Truck, label: "Today's Deliveries", value: todayDeliveries.length, color: '#2563eb', bg: '#dbeafe' },
-                        { icon: RefreshCw, label: 'Active Subscriptions', value: todayDeliveries.length, color: '#059669', bg: '#d1fae5' },
-                        { icon: IndianRupee, label: 'Est. Monthly Bill', value: formatCurrency(monthlyTotal), color: '#7c3aed', bg: '#ede9fe' },
-                        { icon: ShoppingBag, label: 'Total Orders', value: ordersData?.length || 0, color: '#dc2626', bg: '#fee2e2' },
-                    ].map((s) => (
-                        <div key={s.label} className="stat-card">
-                            <div style={{ width: 40, height: 40, background: s.bg, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, marginBottom: '0.75rem' }}>
-                                <s.icon size={20} />
+                {/* Top Action Banners */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                    
+                    {/* Primary Order Button */}
+                    <Link to="/products?type=one-time" style={{ textDecoration: 'none' }}>
+                        <div className="card" style={{ background: '#2563eb', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1.5rem', cursor: 'pointer', transition: 'transform 0.15s' }}>
+                            <div style={{ width: 64, height: 64, background: 'rgba(255,255,255,0.2)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyItems: 'center', flexShrink: 0 }}>
+                                <ShoppingBag size={32} style={{ margin: 'auto' }} />
                             </div>
-                            <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: '0.25rem' }}>{s.label}</div>
-                            <div style={{ fontSize: '1.375rem', fontWeight: 700, color: '#0f172a' }}>{s.value}</div>
+                            <div>
+                                <div style={{ fontWeight: 800, fontSize: '1.5rem', marginBottom: '0.25rem', lineHeight: 1.1 }}>Order for Tomorrow</div>
+                                <div style={{ fontSize: '1rem', opacity: 0.9 }}>One-time milk delivery</div>
+                            </div>
                         </div>
-                    ))}
+                    </Link>
+
+                    {/* Subscription Button */}
+                    <Link to="/products?type=subscription" style={{ textDecoration: 'none' }}>
+                        <div className="card" style={{ background: '#059669', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1.5rem', cursor: 'pointer', transition: 'transform 0.15s' }}>
+                            <div style={{ width: 64, height: 64, background: 'rgba(255,255,255,0.2)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyItems: 'center', flexShrink: 0 }}>
+                                <RefreshCw size={32} style={{ margin: 'auto' }} />
+                            </div>
+                            <div>
+                                <div style={{ fontWeight: 800, fontSize: '1.5rem', marginBottom: '0.25rem', lineHeight: 1.1 }}>Start Daily Milk</div>
+                                <div style={{ fontSize: '1rem', opacity: 0.9 }}>Set up recurring deliveries</div>
+                            </div>
+                        </div>
+                    </Link>
+                </div>
+
+                {/* Balance & Status */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+                    <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem', background: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ background: '#22c55e', color: 'white', width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <IndianRupee size={24} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '1rem', color: '#166534', fontWeight: 700 }}>My Balance</div>
+                                <div style={{ fontSize: '0.875rem', color: '#15803d' }}>Prepaid Account</div>
+                            </div>
+                        </div>
+                        <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#166534' }}>
+                            {formatCurrency(walletBalance)}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
@@ -126,29 +159,9 @@ export default function CustomerDashboard() {
                     </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
-                    {[
-                        { to: '/products?type=one-time', icon: ShoppingBag, label: 'Order for Tomorrow', desc: 'One-time delivery', color: '#2563eb', bg: '#dbeafe' },
-                        { to: '/products?type=subscription', icon: RefreshCw, label: 'Start Daily Milk', desc: 'Set up recurring orders', color: '#059669', bg: '#d1fae5' },
-                        { to: '/wallet', icon: IndianRupee, label: 'My Balance', desc: 'View payment history', color: '#7c3aed', bg: '#ede9fe' },
-                    ].map((action) => (
-                        <Link key={action.to} to={action.to} style={{ textDecoration: 'none' }}>
-                            <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', transition: 'all 0.15s' }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#bfdbfe'; e.currentTarget.style.boxShadow = '0 4px 12px rgb(0 0 0 / 0.08)' }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px 0 rgb(0 0 0 / 0.05)' }}
-                            >
-                                <div style={{ width: 44, height: 44, background: action.bg, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: action.color, flexShrink: 0 }}>
-                                    <action.icon size={20} />
-                                </div>
-                                <div>
-                                    <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#0f172a' }}>{action.label}</div>
-                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{action.desc}</div>
-                                </div>
-                            </div>
-                        </Link>
-                    ))}
-                </div>
+                <Link to="/wallet" className="btn-secondary" style={{ width: '100%', justifyContent: 'center', padding: '1rem', fontSize: '1.125rem', marginTop: '1rem' }}>
+                    <IndianRupee size={20} /> Add Funds to Balance
+                </Link>
             </div>
         </div>
     )

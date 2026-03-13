@@ -109,6 +109,7 @@ export default function AdminDashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                     {[
                         { to: '/admin/delivery', icon: Truck, label: 'Delivery Report', color: '#7c3aed', bg: '#ede9fe' },
+                        { to: '/admin/subscriptions', icon: RefreshCw, label: 'Subscriptions', color: '#ec4899', bg: '#fce7f3' },
                         { to: '/admin/customers', icon: Users, label: 'Customers', color: '#059669', bg: '#d1fae5' },
                         { to: '/admin/products', icon: Package, label: 'Products', color: '#f59e0b', bg: '#fef3c7' },
                         { to: '/admin/analytics', icon: TrendingUp, label: 'Analytics', color: '#dc2626', bg: '#fee2e2' },

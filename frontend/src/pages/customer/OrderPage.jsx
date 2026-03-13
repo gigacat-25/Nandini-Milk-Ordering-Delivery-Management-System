@@ -184,7 +184,7 @@ export default function OrderPage() {
 
                 {/* Progress Steps */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
-                    {['Cart', 'Delivery', 'Payment'].map((s, i) => (
+                    {['Items', 'Details', 'Confirm'].map((s, i) => (
                         <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div style={{
                                 width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -342,11 +342,11 @@ export default function OrderPage() {
 
                         {step === 3 && (
                             <div className="card">
-                                <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Payment</h2>
+                                <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1.25rem' }}>Final Confirmation</h2>
 
                                 <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                        <div style={{ fontWeight: 600, color: '#475569' }}>Prepaid Wallet Balance</div>
+                                        <div style={{ fontWeight: 600, color: '#475569' }}>My Prepaid Balance</div>
                                         <div style={{ fontWeight: 800, fontSize: '1.25rem', color: walletBalance >= total || orderType === 'subscription' ? '#059669' : '#dc2626' }}>
                                             {formatCurrency(walletBalance)}
                                         </div>
@@ -419,8 +419,8 @@ export default function OrderPage() {
                             </div>
 
                             {step === 1 && (
-                                <button className="btn-primary" onClick={() => { if (items.length === 0) { toast.error('Cart is empty'); return } setStep(2) }} style={{ width: '100%', justifyContent: 'center' }}>
-                                    Continue to Delivery →
+                                <button className="btn-primary" onClick={() => { if (items.length === 0) { toast.error('List is empty'); return } setStep(2) }} style={{ width: '100%', justifyContent: 'center' }}>
+                                    Fill Delivery Details →
                                 </button>
                             )}
                             {step === 2 && (
@@ -446,7 +446,7 @@ export default function OrderPage() {
                                     >
                                         Continue to Payment →
                                     </button>
-                                    <button className="btn-secondary" onClick={() => setStep(1)} style={{ width: '100%', justifyContent: 'center' }}>← Back to Cart</button>
+                                    <button className="btn-secondary" onClick={() => setStep(1)} style={{ width: '100%', justifyContent: 'center' }}>← Back to Selected Items</button>
                                 </div>
                             )}
                             {step === 3 && (

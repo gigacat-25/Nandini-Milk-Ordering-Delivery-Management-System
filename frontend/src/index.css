@@ -23,6 +23,7 @@ html {
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1.125rem;
   background-color: #f8fafc;
   color: #1e293b;
   margin: 0;
@@ -62,10 +63,10 @@ body {
 .btn-primary {
   background: #2563eb;
   color: white;
-  padding: 0.625rem 1.25rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.875rem;
+  padding: 0.875rem 1.75rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -94,10 +95,10 @@ body {
 .btn-secondary {
   background: white;
   color: #374151;
-  padding: 0.625rem 1.25rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.875rem;
+  padding: 0.875rem 1.75rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
   border: 1px solid #e2e8f0;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -114,10 +115,10 @@ body {
 .btn-danger {
   background: #ef4444;
   color: white;
-  padding: 0.625rem 1.25rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.875rem;
+  padding: 0.875rem 1.75rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -132,10 +133,10 @@ body {
 
 .input {
   width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #e2e8f0;
+  padding: 0.875rem 1rem;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-family: 'Inter', sans-serif;
   background: white;
   color: #1e293b;
@@ -154,9 +155,9 @@ body {
 
 .label {
   display: block;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #374151;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
   margin-bottom: 0.375rem;
 }
 
@@ -295,14 +296,14 @@ tbody tr:hover {
 }
 
 .page-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 800;
   color: #0f172a;
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 0.5rem 0;
 }
 
 .page-subtitle {
-  font-size: 0.875rem;
-  color: #64748b;
+  font-size: 1rem;
+  color: #334155;
   margin: 0;
 }

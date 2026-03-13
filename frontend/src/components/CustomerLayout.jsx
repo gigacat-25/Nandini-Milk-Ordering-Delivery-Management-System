@@ -8,12 +8,12 @@ export default function CustomerLayout({ children }) {
     const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0)
 
     const tabs = [
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
+        { name: 'Home', path: '/dashboard', icon: LayoutGrid },
         { name: 'Products', path: '/products', icon: ShoppingBag },
-        { name: 'Subscriptions', path: '/subscriptions', icon: RefreshCw },
-        { name: 'Cart', path: '/order', icon: ShoppingCart },
-        { name: 'Reports', path: '/reports', icon: FileText },
-        { name: 'Payment', path: '/payment', icon: IndianRupee },
+        { name: 'Daily Setup', path: '/subscriptions', icon: RefreshCw },
+        { name: 'Confirm', path: '/order', icon: ShoppingCart },
+        { name: 'History', path: '/reports', icon: FileText },
+        { name: 'Balance', path: '/payment', icon: IndianRupee },
         { name: 'Profile', path: '/profile', icon: AlignRight }
     ]
 
@@ -61,7 +61,7 @@ export default function CustomerLayout({ children }) {
                         >
                             <div style={{ position: 'relative', display: 'flex' }}>
                                 <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                                {tab.name === 'Cart' && cartCount > 0 && (
+                                {tab.name === 'Confirm' && cartCount > 0 && (
                                     <span style={{
                                         position: 'absolute', top: -5, right: -8,
                                         background: '#2563eb', color: 'white', borderRadius: '50%',

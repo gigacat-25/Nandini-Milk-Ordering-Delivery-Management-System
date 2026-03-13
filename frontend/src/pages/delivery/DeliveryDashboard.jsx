@@ -4,6 +4,30 @@ import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate,
 import DeliveryNavbar from '../../components/DeliveryNavbar'
 import toast from 'react-hot-toast'
 
+const playSuccessSound = () => {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+        const playNote = (freq, startTime, duration) => {
+            const osc = audioCtx.createOscillator()
+            const gainNode = audioCtx.createGain()
+            osc.type = 'sine'
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime)
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime + startTime)
+            gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + startTime + 0.05)
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration)
+            osc.connect(gainNode)
+            gainNode.connect(audioCtx.destination)
+            osc.start(audioCtx.currentTime + startTime)
+            osc.stop(audioCtx.currentTime + startTime + duration)
+        }
+        // Play a happy major arpeggio
+        playNote(523.25, 0, 0.2) // C5
+        playNote(659.25, 0.1, 0.2) // E5
+        playNote(783.99, 0.2, 0.2) // G5
+        playNote(1046.50, 0.3, 0.4) // C6
+    } catch(e) { console.error('Audio not supported', e) }
+}
+
 export default function DeliveryDashboard() {
     const { data: subscriptions, loading: subsLoading } = useSubscriptions()
     const { data: customers, loading: custLoading } = useCustomers()
@@ -147,6 +171,7 @@ export default function DeliveryDashboard() {
                 await refetchComp()
             }
             toast.success('✅ Delivery confirmed with photo!')
+            playSuccessSound()
             closePhotoModal()
         } catch (err) {
             console.error(err)
@@ -228,9 +253,11 @@ export default function DeliveryDashboard() {
                         </div>
                     ) : deliveries.map((d, idx) => (
                         <div key={d.id} className="card fade-in" style={{
-                            padding: '1rem',
-                            display: 'flex', flexDirection: 'column', gap: '0.75rem',
+                            padding: '1.25rem',
+                            display: 'flex', flexDirection: 'column', gap: '0.875rem',
                             opacity: d.status === 'delivered' ? 0.7 : 1,
+                            border: d.status === 'pending' ? '2px solid #93c5fd' : '1px solid #e2e8f0',
+                            boxShadow: d.status === 'pending' ? '0 10px 15px -3px rgba(59, 130, 246, 0.1)' : '0 1px 3px 0 rgb(0 0 0 / 0.05)',
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -250,14 +277,19 @@ export default function DeliveryDashboard() {
                                 )}
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                <span style={{ fontSize: '0.8125rem', color: '#475569', display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
-                                    <MapPin size={14} style={{ flexShrink: 0, marginTop: 2, color: '#94a3b8' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                                <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: '#f1f5f9', padding: '0.75rem', borderRadius: 8 }}>
+                                    <MapPin size={18} style={{ flexShrink: 0, marginTop: 2, color: '#3b82f6' }} />
                                     <span>{d.address}</span>
-                                </span>
-                                <span style={{ fontSize: '0.8125rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                    <Phone size={14} style={{ color: '#94a3b8' }} /> {d.phone}
-                                </span>
+                                </div>
+                                
+                                <a href={`tel:${d.phone}`} style={{ 
+                                    textDecoration: 'none', background: '#22c55e', color: 'white', padding: '0.75rem', borderRadius: 8, 
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '1rem',
+                                    boxShadow: '0 4px 6px -1px rgba(34, 197, 94, 0.4)'
+                                }}>
+                                    <Phone size={18} /> Call Customer {d.phone}
+                                </a>
                             </div>
 
                             {d.instructions && (
