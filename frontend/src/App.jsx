@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast'
 // Pages
 import LandingPage from './pages/LandingPage'
 import AuthPage from './pages/AuthPage'
+import TermsPage from './pages/TermsPage'
+import PrivacyPage from './pages/PrivacyPage'
 
 // Customer
 import CustomerDashboard from './pages/customer/CustomerDashboard'
@@ -53,6 +55,8 @@ export default function App() {
         {/* Public */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/products" element={<CustomerLayout><ProductsPage /></CustomerLayout>} />
 
         {/* Customer Routes */}
