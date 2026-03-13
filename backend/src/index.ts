@@ -536,9 +536,8 @@ app.post('/upload', async (c) => {
     httpMetadata: { contentType: file.type }
   });
 
-  // Use a relative URL that will be handled by our GET /assets/* endpoint
-  // Vite proxy will route /api/assets/ to this worker
-  const url = `/api/assets/${key}`;
+  const origin = new URL(c.req.url).origin;
+  const url = `${origin}/assets/${key}`;
 
   // If it's a delivery photo, save to DB
   if (folder === 'deliveries') {

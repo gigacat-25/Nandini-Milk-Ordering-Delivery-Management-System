@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock } from 'lucide-react'
-import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos } from '../../lib/useData'
+import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos, API_BASE } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
@@ -23,6 +23,16 @@ export default function AdminDelivery() {
     const isSessionActive = !!deliverySession
     const [photoLightbox, setPhotoLightbox] = useState(null) // photo URL string
     const { data: deliveryPhotos, refetch: refetchPhotos } = useDeliveryPhotos(date)
+
+    const getPhotoUrl = (url) => {
+        if (!url) return null
+        if (url.startsWith('http')) return url
+        if (url.startsWith('/api/assets/')) {
+            // Replace /api with API_BASE
+            return url.replace('/api', API_BASE)
+        }
+        return `${API_BASE}${url}`
+    }
 
     // Poll for updates every 10 seconds to keep the admin view in sync with drivers
     useEffect(() => {
@@ -506,7 +516,7 @@ export default function AdminDelivery() {
                                                 const photo = deliveryPhotos?.find(p => p.target_id === d.id)
                                                 return photo ? (
                                                     <button
-                                                        onClick={() => setPhotoLightbox(photo.photo_url)}
+                                                        onClick={() => setPhotoLightbox(getPhotoUrl(photo.photo_url))}
                                                         style={{ background: '#f0fdf4', border: '1px solid #86efac', padding: '0.3rem 0.6rem', borderRadius: 6, color: '#059669', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                                                         title="View proof of delivery photo"
                                                     >

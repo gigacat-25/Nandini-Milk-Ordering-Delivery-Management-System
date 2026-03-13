@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useUser } from '@clerk/clerk-react'
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+export const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 // Helper to handle API calls with Clerk Auth
 async function apiFetch(path, options = {}, clerkToken = null) {
