@@ -30,7 +30,10 @@ export default function AdminAnalytics() {
             salesDataMap[month].revenue += o.total_amount
             salesDataMap[month].orders += 1
         })
-    const SALES_DATA = Object.values(salesDataMap).reverse() // Simple reversal assuming chronological order fetching
+    const monthsOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const SALES_DATA = Object.values(salesDataMap).sort((a, b) => {
+        return monthsOrder.indexOf(a.month) - monthsOrder.indexOf(b.month)
+    })
 
     // Dynamic Product Sales Pie Chart
     const productSalesMap = {}

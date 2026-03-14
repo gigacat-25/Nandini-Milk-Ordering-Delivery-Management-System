@@ -346,9 +346,13 @@ app.post('/skips', async (c) => {
 })
 
 app.delete('/skips', async (c) => {
-    const { dateStr, targetId, productId } = await c.req.json();
-    await c.env.DB.prepare("DELETE FROM partial_skips WHERE skip_date = ? AND target_id = ? AND product_id = ?").bind(dateStr, targetId, productId).run();
-    return c.json({ success: true });
+    try {
+        const { dateStr, targetId, productId } = await c.req.json();
+        await c.env.DB.prepare("DELETE FROM partial_skips WHERE skip_date = ? AND target_id = ? AND product_id = ?").bind(dateStr, targetId, productId).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.get('/skips', async (c) => {
@@ -371,51 +375,75 @@ app.get('/skips', async (c) => {
  * --- SESSIONS ---
  */
 app.get('/sessions', async (c) => {
-    const date = c.req.query('date');
-    const slot = c.req.query('slot');
-    const session = await c.env.DB.prepare("SELECT * FROM delivery_sessions WHERE session_date = ? AND slot = ? AND active = 1").bind(date, slot).first();
-    return c.json(session);
+    try {
+        const date = c.req.query('date');
+        const slot = c.req.query('slot');
+        const session = await c.env.DB.prepare("SELECT * FROM delivery_sessions WHERE session_date = ? AND slot = ? AND active = 1").bind(date, slot).first();
+        return c.json(session);
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.post('/sessions/start', async (c) => {
-    const { dateStr, slot, adminId } = await c.req.json();
-    const id = crypto.randomUUID();
-    await c.env.DB.prepare(`
-        INSERT INTO delivery_sessions (id, session_date, slot, started_by, active)
-        VALUES (?, ?, ?, ?, 1)
-        ON CONFLICT(session_date, slot) DO UPDATE SET active = 1, ended_at = NULL, started_at = CURRENT_TIMESTAMP
-    `).bind(id, dateStr, slot, adminId).run();
-    const session = await c.env.DB.prepare("SELECT * FROM delivery_sessions WHERE session_date = ? AND slot = ?").bind(dateStr, slot).first();
-    return c.json(session);
+    try {
+        const { dateStr, slot, adminId } = await c.req.json();
+        const id = crypto.randomUUID();
+        await c.env.DB.prepare(`
+            INSERT INTO delivery_sessions (id, session_date, slot, started_by, active)
+            VALUES (?, ?, ?, ?, 1)
+            ON CONFLICT(session_date, slot) DO UPDATE SET active = 1, ended_at = NULL, started_at = CURRENT_TIMESTAMP
+        `).bind(id, dateStr, slot, adminId).run();
+        const session = await c.env.DB.prepare("SELECT * FROM delivery_sessions WHERE session_date = ? AND slot = ?").bind(dateStr, slot).first();
+        return c.json(session);
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.post('/sessions/end', async (c) => {
-    const { dateStr, slot } = await c.req.json();
-    await c.env.DB.prepare("UPDATE delivery_sessions SET active = 0, ended_at = CURRENT_TIMESTAMP WHERE session_date = ? AND slot = ?").bind(dateStr, slot).run();
-    return c.json({ success: true });
+    try {
+        const { dateStr, slot } = await c.req.json();
+        await c.env.DB.prepare("UPDATE delivery_sessions SET active = 0, ended_at = CURRENT_TIMESTAMP WHERE session_date = ? AND slot = ?").bind(dateStr, slot).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 /**
  * --- MISC ---
  */
 app.put('/orders/:id/status', async (c) => {
-    const id = c.req.param('id');
-    const { status } = await c.req.json();
-    await c.env.DB.prepare("UPDATE orders SET status = ? WHERE id = ?").bind(status, id).run();
-    return c.json({ success: true });
+    try {
+        const id = c.req.param('id');
+        const { status } = await c.req.json();
+        await c.env.DB.prepare("UPDATE orders SET status = ? WHERE id = ?").bind(status, id).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.put('/subscriptions/:id/status', async (c) => {
-    const id = c.req.param('id');
-    const { status } = await c.req.json();
-    await c.env.DB.prepare("UPDATE subscriptions SET status = ? WHERE id = ?").bind(status, id).run();
-    return c.json({ success: true });
+    try {
+        const id = c.req.param('id');
+        const { status } = await c.req.json();
+        await c.env.DB.prepare("UPDATE subscriptions SET status = ? WHERE id = ?").bind(status, id).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.delete('/users/:id', async (c) => {
-    const id = c.req.param('id');
-    await c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
-    return c.json({ success: true });
+    try {
+        const id = c.req.param('id');
+        await c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.delete('/subscriptions/:id', async (c) => {
@@ -453,19 +481,27 @@ app.put('/users/:id', async (c) => {
 })
 
 app.get('/users', async (c) => {
-    const { results } = await c.env.DB.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
-    return c.json(results);
+    try {
+        const { results } = await c.env.DB.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
+        return c.json(results);
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.post('/users/:id/renew', async (c) => {
-    const id = c.req.param('id');
-    const nextExpiry = new Date();
-    nextExpiry.setDate(nextExpiry.getDate() + 30);
-    const expiryStr = nextExpiry.toISOString();
-    
-    await c.env.DB.prepare("UPDATE users SET app_fee_expiry = ? WHERE id = ?").bind(expiryStr, id).run();
-    const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
-    return c.json(user);
+    try {
+        const id = c.req.param('id');
+        const nextExpiry = new Date();
+        nextExpiry.setDate(nextExpiry.getDate() + 30);
+        const expiryStr = nextExpiry.toISOString();
+        
+        await c.env.DB.prepare("UPDATE users SET app_fee_expiry = ? WHERE id = ?").bind(expiryStr, id).run();
+        const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+        return c.json(user);
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
 })
 
 app.post('/deliveries/unmark', async (c) => {
@@ -476,11 +512,15 @@ app.post('/deliveries/unmark', async (c) => {
         if (orderId) {
             // 1. Delete delivery record for order
             batch.push(c.env.DB.prepare("DELETE FROM deliveries WHERE customer_id = ? AND order_id = ? AND delivery_date = ?").bind(customerId, orderId, dateStr));
-            // 2. Reset order status to confirmed
+            // 2. Delete photo record
+            batch.push(c.env.DB.prepare("DELETE FROM delivery_photos WHERE target_id = ? AND delivery_date = ?").bind(orderId, dateStr));
+            // 3. Reset order status to confirmed
             batch.push(c.env.DB.prepare("UPDATE orders SET status = 'confirmed' WHERE id = ?").bind(orderId));
         } else {
             // 1. Delete delivery record for subscription
             batch.push(c.env.DB.prepare("DELETE FROM deliveries WHERE customer_id = ? AND subscription_id = ? AND delivery_date = ?").bind(customerId, subscriptionId, dateStr));
+            // 2. Delete photo record
+            batch.push(c.env.DB.prepare("DELETE FROM delivery_photos WHERE target_id = ? AND delivery_date = ?").bind(subscriptionId, dateStr));
         }
         
         // 2. Refund if amount > 0
@@ -497,15 +537,19 @@ app.post('/deliveries/unmark', async (c) => {
 })
 
 app.get('/photos', async (c) => {
-    const date = c.req.query('date');
-    let query = "SELECT * FROM delivery_photos";
-    let params: any[] = [];
-    if (date) {
-        query += " WHERE delivery_date = ?";
-        params.push(date);
+    try {
+        const date = c.req.query('date');
+        let query = "SELECT * FROM delivery_photos";
+        let params: any[] = [];
+        if (date) {
+            query += " WHERE delivery_date = ?";
+            params.push(date);
+        }
+        const { results } = await c.env.DB.prepare(query).bind(...params).all();
+        return c.json(results);
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
     }
-    const { results } = await c.env.DB.prepare(query).bind(...params).all();
-    return c.json(results);
 })
 
 app.get('/assets/*', async (c) => {

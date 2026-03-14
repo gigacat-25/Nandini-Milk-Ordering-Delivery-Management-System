@@ -96,8 +96,15 @@ export default function WalletPage() {
                                 <div className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] opacity-60 mb-2">Available Credits</div>
                                 <div className="text-4xl md:text-7xl font-black tracking-tighter flex items-baseline gap-2">
                                     <span className="text-xl md:text-4xl opacity-50">₹</span>
-                                    {balance.toLocaleString('en-IN')}
-                                    <span className="text-sm md:text-lg opacity-40">.00</span>
+                                {(() => {
+                                    const parts = (balance || 0).toFixed(2).split('.')
+                                    return (
+                                        <>
+                                            {Number(parts[0]).toLocaleString('en-IN')}
+                                            <span className="text-sm md:text-lg opacity-40">.{parts[1]}</span>
+                                        </>
+                                    )
+                                })()}
                                 </div>
                                 <div className="mt-8 flex items-center gap-3 bg-white/10 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/10 text-[10px] md:text-xs font-bold">
                                     <ShieldCheck size={14} className="text-blue-200" />

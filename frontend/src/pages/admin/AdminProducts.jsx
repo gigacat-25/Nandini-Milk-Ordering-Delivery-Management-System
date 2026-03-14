@@ -54,11 +54,11 @@ export default function AdminProducts() {
 
             const productData = {
                 ...form,
-                price: parseFloat(form.price),
-                stock_qty: parseInt(form.stock_qty || 0),
+                price: parseFloat(form.price) || 0,
+                stock_qty: parseInt(form.stock_qty || 0) || 0,
                 image_url: finalImageUrl,
-                cutoff_morning: parseFloat(form.cutoff_morning),
-                cutoff_evening: parseFloat(form.cutoff_evening)
+                cutoff_morning: parseFloat(form.cutoff_morning) || 15.5,
+                cutoff_evening: parseFloat(form.cutoff_evening) || 19.5
             }
 
             if (editProduct) {
