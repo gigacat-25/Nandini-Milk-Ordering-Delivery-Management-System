@@ -98,7 +98,7 @@ export default function DeliveryDashboard() {
             }, {})
 
             const subItemsStr = Object.values(grouped).map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
-            const subAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
+            const subAmount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
 
             const hasFunds = (customer?.wallet_balance || 0) >= subAmount
             let status = isDelivered ? 'delivered' : 'pending'
@@ -142,7 +142,7 @@ export default function DeliveryDashboard() {
             }, {})
 
             const itemsStr = Object.values(grouped).map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
-            const orderAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
+            const orderAmount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
 
             return {
                 id: order.id,

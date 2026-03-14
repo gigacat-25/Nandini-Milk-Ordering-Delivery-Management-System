@@ -131,7 +131,7 @@ export default function CustomerDashboard() {
                                     <div className="space-y-4">
                                         {todayDeliveries.map((s) => {
                                             const itemsStr = s.activeItems?.map(i => `${i.quantity}x ${i.products?.name}`).join(', ') || 'No Items'
-                                            const subTotal = s.activeItems?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+                                            const subTotal = s.activeItems?.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0) || 0
                                             return (
                                                 <div key={s.id} className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 hover:bg-slate-50 transition-colors group">
                                                     <div className="flex items-center gap-4">

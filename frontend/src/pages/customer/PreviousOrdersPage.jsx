@@ -64,7 +64,7 @@ export default function PreviousOrdersPage() {
                     ) : (
                         orders.map((order, idx) => {
                             const activeItems = (order.items || []).filter(item => !skips?.some(s => s.target_id === order.id && s.product_id === item.product_id))
-                            const effectiveTotal = activeItems.reduce((sum, item) => sum + (item.price_at_time * item.quantity), 0)
+                            const effectiveTotal = activeItems.reduce((sum, item) => sum + ((item.price_at_time ?? item.products?.price ?? 0) * item.quantity), 0)
                             let effectiveStatus = order.status
                             if (activeItems.length === 0 && (order.items || []).length > 0) effectiveStatus = 'cancelled'
 
@@ -141,7 +141,7 @@ export default function PreviousOrdersPage() {
                                                                 </div>
                                                             </div>
                                                             <span className={`text-sm font-black ${isSkipped ? 'text-slate-300' : 'text-slate-900'}`}>
-                                                                {formatCurrency(item.price_at_time * item.quantity)}
+                                                                {formatCurrency((item.price_at_time ?? item.products?.price ?? 0) * item.quantity)}
                                                             </span>
                                                         </div>
                                                     )

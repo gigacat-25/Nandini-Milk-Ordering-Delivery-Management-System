@@ -103,7 +103,7 @@ export default function AdminDelivery() {
             }, {}))
 
             const activeItems = subItems.filter(i => !i.isSkipped)
-            const subAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
+            const subAmount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
 
             const hasFunds = (customer?.wallet_balance || 0) >= subAmount
             let status = isDelivered ? 'delivered' : 'pending'
@@ -145,7 +145,7 @@ export default function AdminDelivery() {
             }, {}))
 
             const activeItems = orderItems.filter(i => !i.isSkipped)
-            const amount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
+            const amount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
 
             let status = order.status === 'delivered' ? 'delivered' : 'pending'
             if (activeItems.length === 0 && orderItems.length > 0) status = 'cancelled'

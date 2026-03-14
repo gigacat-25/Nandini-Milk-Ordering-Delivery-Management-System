@@ -74,7 +74,7 @@ export default function SubscriptionsPage() {
 
     const activeSubs = (subs || []).filter(s => s.status === 'active')
     const monthlyEst = activeSubs.reduce((sum, s) => {
-        const subTotal = s.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+        const subTotal = s.items?.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0) || 0
         return sum + subTotal * 30
     }, 0)
 
@@ -140,7 +140,7 @@ export default function SubscriptionsPage() {
                         </motion.div>
                     ) : (
                         subs.map((s) => {
-                            const subTotal = s.items?.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0) || 0
+                            const subTotal = s.items?.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0) || 0
                             const isActive = s.status === 'active'
 
                             return (

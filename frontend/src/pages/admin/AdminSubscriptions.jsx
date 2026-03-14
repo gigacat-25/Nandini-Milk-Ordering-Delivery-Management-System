@@ -22,7 +22,7 @@ export default function AdminSubscriptions() {
         return subscriptions.map(sub => {
             const customer = customers.find(c => c.id === sub.customer_id)
             const activeItems = sub.items || []
-            const subAmount = activeItems.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0)
+            const subAmount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
             
             // Analyze pauses
             const subPauses = (pauses || []).filter(p => p.subscription_id === sub.id)
@@ -216,7 +216,7 @@ export default function AdminSubscriptions() {
                                 {selectedSub.items?.map(item => (
                                     <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
                                         <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{item.quantity}x {item.products?.name}</div>
-                                        <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatCurrency(item.price_at_time * item.quantity)}</div>
+                                        <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatCurrency((item.price_at_time ?? item.products?.price ?? 0) * item.quantity)}</div>
                                     </div>
                                 ))}
                             </div>

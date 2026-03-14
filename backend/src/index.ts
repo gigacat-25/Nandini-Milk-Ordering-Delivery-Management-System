@@ -129,7 +129,7 @@ app.get('/subscriptions', async (c) => {
   try {
     let query = `
       SELECT s.*, 
-      (SELECT json_group_array(json_object('id', si.id, 'product_id', si.product_id, 'quantity', si.quantity, 'products', json_object('name', p.name, 'size_label', p.size_label, 'price', p.price)))
+      (SELECT json_group_array(json_object('id', si.id, 'product_id', si.product_id, 'quantity', si.quantity, 'price_at_time', si.price_at_time, 'products', json_object('name', p.name, 'size_label', p.size_label, 'price', p.price)))
        FROM subscription_items si 
        JOIN products p ON si.product_id = p.id 
        WHERE si.subscription_id = s.id) as items
