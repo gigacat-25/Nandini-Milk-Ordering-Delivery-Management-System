@@ -21,7 +21,7 @@ export default function ProductsPage() {
     const queryParams = new URLSearchParams(location.search)
     const orderType = queryParams.get('type') || 'one-time'
 
-    const { data: allProducts, loading, error } = useProducts()
+    const { data: allProducts, loading, error } = useProducts('delivery')
 
     const containerVariants = {
         hidden: { opacity: 0 },

@@ -13,7 +13,7 @@ export default function AdminDelivery() {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
     const [activeSlot, setActiveSlot] = useState('morning')
     const { data: pauses, loading: pausesLoading } = useSubscriptionPauses(date)
-    const { data: orders, loading: ordersLoading, refetch: refetchOrders } = useOrdersByDate(date)
+    const { data: orders, loading: ordersLoading, refetch: refetchOrders } = useOrdersByDate(date, 'delivery')
     const { data: completedDeliveries, loading: compLoading, refetch: refetchComp } = useDeliveries(date)
     const { data: deliverySession, refetch: refetchSession } = useDeliverySession(date, activeSlot)
     const { data: partialSkips, loading: skipsLoading, refetch: refetchSkips } = usePartialSkips(date)

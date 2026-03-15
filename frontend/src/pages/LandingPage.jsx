@@ -27,7 +27,7 @@ const testimonials = [
 
 export default function LandingPage() {
     const { isSignedIn, user } = useUser()
-    const { data: products } = useProducts()
+    const { data: products } = useProducts('delivery')
     const isAdmin = isSignedIn && (user?.publicMetadata?.role === 'admin' || user?.primaryEmailAddress?.emailAddress === 'thejaswinp6@gmail.com')
 
     const containerVariants = {

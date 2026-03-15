@@ -295,6 +295,13 @@ export async function renewAppAccess(userId) {
     })
 }
 
+export async function updateUserRole(userId, role) {
+    return apiFetch(`/users/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role })
+    })
+}
+
 // --- Delivery Sessions ---
 export function useDeliverySession(dateStr, slot) {
     return useApiQuery(`/sessions?date=${dateStr}&slot=${slot}`, [dateStr, slot])
@@ -313,6 +320,7 @@ export async function endDeliverySession(dateStr, slot) {
         body: JSON.stringify({ dateStr, slot })
     })
 }
+
 
 export async function toggleSubscriptionStatus(subscriptionId, customerId, newStatus) {
     return apiFetch(`/subscriptions/${subscriptionId}/status`, {

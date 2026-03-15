@@ -15,9 +15,8 @@ app.use('*', cors())
  */
 app.get('/products', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare(
-      "SELECT * FROM products ORDER BY category, name"
-    ).all();
+    let query = "SELECT * FROM products ORDER BY category, name";
+    const { results } = await c.env.DB.prepare(query).all();
     return c.json(results);
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
@@ -29,12 +28,12 @@ app.post('/products', async (c) => {
   const id = crypto.randomUUID();
   try {
     await c.env.DB.prepare(`
-      INSERT INTO products (id, name, category, size_label, price, stock_qty, active, image_url, cutoff_morning, cutoff_evening)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (id, name, category, size_label, price, stock_qty, active, image_url, cutoff_morning, cutoff_evening, visibility)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, body.name, body.category, body.size_label, body.price, 
       body.stock_qty, body.active ? 1 : 0, body.image_url, 
-      body.cutoff_morning, body.cutoff_evening
+      body.cutoff_morning, body.cutoff_evening, body.visibility || 'both'
     ).run();
     return c.json({ id });
   } catch (e: any) {
@@ -50,12 +49,12 @@ app.put('/products/:id', async (c) => {
       UPDATE products SET 
         name = ?, category = ?, size_label = ?, price = ?, 
         stock_qty = ?, active = ?, image_url = ?, 
-        cutoff_morning = ?, cutoff_evening = ?
+        cutoff_morning = ?, cutoff_evening = ?, visibility = ?
       WHERE id = ?
     `).bind(
       body.name, body.category, body.size_label, body.price, 
       body.stock_qty, body.active ? 1 : 0, body.image_url, 
-      body.cutoff_morning, body.cutoff_evening, id
+      body.cutoff_morning, body.cutoff_evening, body.visibility || 'both', id
     ).run();
     return c.json({ success: true });
   } catch (e: any) {
@@ -98,8 +97,8 @@ app.post('/users/upsert', async (c) => {
   try {
     // SQLite Upsert syntax
     await c.env.DB.prepare(`
-      INSERT INTO users (id, email, phone, full_name)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO users (id, email, phone, full_name, role)
+      VALUES (?, ?, ?, ?, 'customer')
       ON CONFLICT(id) DO UPDATE SET
         email = excluded.email,
         phone = excluded.phone,
@@ -206,7 +205,7 @@ app.get('/orders', async (c) => {
     
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
     
-    const formatted = results.map((r: any) => ({
+    const formatted = (results || []).map((r: any) => ({
       ...r,
       items: JSON.parse(r.items)
     }));
@@ -242,8 +241,8 @@ app.post('/orders', async (c) => {
   try {
     await c.env.DB.batch([
       c.env.DB.prepare(`
-        INSERT INTO orders (id, customer_id, status, total_amount, delivery_date, delivery_slot)
-        VALUES (?, ?, 'confirmed', ?, ?, ?)
+        INSERT INTO orders (id, customer_id, status, total_amount, delivery_date, delivery_slot, order_type, payment_method)
+        VALUES (?, ?, 'confirmed', ?, ?, ?, 'delivery', 'wallet')
       `).bind(orderId, customerId, totalAmount, deliveryDate, deliverySlot),
       ...items.map((item: any) => 
         c.env.DB.prepare(`
@@ -257,6 +256,7 @@ app.post('/orders', async (c) => {
     return c.json({ error: e.message }, 500);
   }
 })
+
 
 app.post('/subscriptions', async (c) => {
   const { customerId, items, deliverySlot, frequency } = await c.req.json();
@@ -450,6 +450,17 @@ app.delete('/subscriptions/:id', async (c) => {
     const id = c.req.param('id');
     try {
         await c.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(id).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+})
+
+app.put('/users/:id/role', async (c) => {
+    try {
+        const id = c.req.param('id');
+        const { role } = await c.req.json();
+        await c.env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
         return c.json({ success: true });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);

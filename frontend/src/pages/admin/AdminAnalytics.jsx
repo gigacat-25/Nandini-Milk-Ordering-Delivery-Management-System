@@ -3,7 +3,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 import { TrendingUp, IndianRupee, Users, ShoppingBag } from 'lucide-react'
-import { useOrders, useCustomers, useSubscriptions } from '../../lib/useData'
+import { useOrders, useCustomers, useSubscriptions, useProducts } from '../../lib/useData'
 import { formatCurrency } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 
@@ -13,6 +13,7 @@ export default function AdminAnalytics() {
     const { data: orders, loading: ordersLoading } = useOrders()
     const { data: customers, loading: custLoading } = useCustomers()
     const { data: subscriptions, loading: subsLoading } = useSubscriptions()
+    const { data: products, loading: productsLoading } = useProducts()
 
     // Compute live metrics
     const totalRevenue = (orders || []).reduce((s, d) => s + d.total_amount, 0)
@@ -45,16 +46,19 @@ export default function AdminAnalytics() {
             })
         })
 
-    const PRODUCT_SALES_RAW = Object.entries(productSalesMap).map(([id, qty]) => ({
-        name: `Prod-${id.substring(0, 4)}`, // Don't have product details joined heavily on items yet, so simple names
-        value: totalItemsSold > 0 ? Math.round((qty / totalItemsSold) * 100) : 0
-    })).sort((a, b) => b.value - a.value)
+    const PRODUCT_SALES_RAW = Object.entries(productSalesMap).map(([id, qty]) => {
+        const product = (products || []).find(p => p.id === id)
+        return {
+            name: product ? product.name : `Prod-${id.substring(0, 4)}`,
+            value: totalItemsSold > 0 ? Math.round((qty / totalItemsSold) * 100) : 0
+        }
+    }).sort((a, b) => b.value - a.value)
 
     // Fallback if no real data
     const PRODUCT_SALES = PRODUCT_SALES_RAW.length > 0 ? PRODUCT_SALES_RAW : [{ name: 'No Data', value: 100 }]
     const CHART_DATA = SALES_DATA.length > 0 ? SALES_DATA : [{ month: 'Current', revenue: 0, orders: 0 }]
 
-    if (ordersLoading || custLoading || subsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading analytics...</div>
+    if (ordersLoading || custLoading || subsLoading || productsLoading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}>Loading analytics...</div>
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc' }}>

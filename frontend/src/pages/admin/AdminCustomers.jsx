@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Search, Eye, Mail, Phone, Edit2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
-import { useCustomers, useOrders, useSubscriptions, addWalletFunds, deleteCustomerAccount, renewAppAccess } from '../../lib/useData'
+import { useCustomers, useOrders, useSubscriptions, addWalletFunds, deleteCustomerAccount, renewAppAccess, updateUserRole } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import toast from 'react-hot-toast'
 import Navbar from '../../components/Navbar'
@@ -98,6 +98,26 @@ export default function AdminCustomers() {
             setSelected(null)
         } catch (err) {
             toast.error('Failed to delete account: ' + err.message)
+        } finally {
+            setLoadingAction(false)
+        }
+    }
+
+    async function handleRoleChange(customer, newRole) {
+        if (customer.id === 'user_2mFwB...') { // Placeholder for current user check if needed
+            // Actually, let's just use confirmation
+        }
+        
+        if (!confirm(`Are you sure you want to change ${customer.full_name}'s role to ${newRole.toUpperCase()}?`)) return
+
+        setLoadingAction(true)
+        try {
+            await updateUserRole(customer.id, newRole)
+            await refetchCustomers()
+            toast.success(`Role updated to ${newRole}`)
+            setSelected(prev => ({ ...prev, role: newRole }))
+        } catch (err) {
+            toast.error('Failed to update role: ' + err.message)
         } finally {
             setLoadingAction(false)
         }
@@ -218,9 +238,27 @@ export default function AdminCustomers() {
                                 </div>
                             ))}
                         </div>
-                        <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: 8 }}>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Clerk ID</div>
-                            <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem' }}>{selected.id}</div>
+                        <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.5rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Access Role</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <select 
+                                    value={selected.role || 'customer'} 
+                                    onChange={(e) => handleRoleChange(selected, e.target.value)}
+                                    disabled={loadingAction}
+                                    style={{ 
+                                        flex: 1, padding: '0.5rem', borderRadius: 8, border: '1px solid #cbd5e1', 
+                                        fontSize: '0.875rem', fontWeight: 600, background: 'white', cursor: loadingAction ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    <option value="customer">👤 Standard Customer</option>
+                                    <option value="delivery">🚚 Delivery Agent</option>
+                                    <option value="admin">🔐 System Administrator</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style={{ background: '#f1f5f9', padding: '0.5rem 0.75rem', borderRadius: 8 }}>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Clerk Identity: <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{selected.id}</span></div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
                             {[

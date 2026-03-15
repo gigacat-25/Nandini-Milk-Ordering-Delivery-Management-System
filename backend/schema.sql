@@ -25,6 +25,7 @@ CREATE TABLE users (
   google_maps_url TEXT,
   app_fee_expiry TEXT,
   wallet_balance REAL DEFAULT 0,
+  role TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'admin', 'delivery')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -41,6 +42,7 @@ CREATE TABLE products (
   image_url TEXT,
   cutoff_morning REAL DEFAULT 15.5,
   cutoff_evening REAL DEFAULT 19.5,
+  visibility TEXT DEFAULT 'both' CHECK (visibility IN ('both', 'delivery')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -53,6 +55,8 @@ CREATE TABLE orders (
   total_amount REAL NOT NULL DEFAULT 0,
   delivery_date TEXT,
   delivery_slot TEXT NOT NULL DEFAULT 'morning' CHECK (delivery_slot IN ('morning', 'evening')),
+  order_type TEXT DEFAULT 'delivery',
+  payment_method TEXT DEFAULT 'wallet' CHECK (payment_method IN ('wallet', 'cash', 'upi')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

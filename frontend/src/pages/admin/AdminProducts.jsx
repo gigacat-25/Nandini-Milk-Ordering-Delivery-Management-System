@@ -263,21 +263,12 @@ export default function AdminProducts() {
                                         <span style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a' }}>{formatCurrency(p.price)}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    await updateProduct(p.id, { ...p, stock_qty: p.stock_qty > 0 ? 0 : 1 })
-                                                    refetch()
-                                                } catch (err) {
-                                                    toast.error(err.message)
-                                                }
-                                            }}
-                                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all ${
-                                                p.stock_qty > 0 ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                                            }`}
-                                        >
-                                            {p.stock_qty > 0 ? 'In Stock' : 'Out of Stock'}
-                                        </button>
+                                        <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 ${
+                                            p.stock_qty > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'
+                                        }`}>
+                                            <Package size={12} />
+                                            {p.stock_qty} {p.stock_qty > 0 ? 'In Stock' : 'Out of Stock'}
+                                        </div>
                                         <button
                                             onClick={() => toggleActive(p)}
                                             className={`px-3 py-1 rounded-full text-[10px] font-black uppercase transition-all ${
@@ -356,37 +347,25 @@ export default function AdminProducts() {
                                 <label className="label">Price (₹) *</label>
                                 <input className="input" type="number" placeholder="0" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} />
                             </div>
-                            <div>
-                                <label className="label">Availability Status</label>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button
-                                        onClick={() => setForm({ ...form, stock_qty: '1' })}
-                                        style={{
-                                            flex: 1, padding: '0.75rem', borderRadius: 10, border: '2px solid',
-                                            borderColor: form.stock_qty > 0 ? '#22c55e' : '#e2e8f0',
-                                            background: form.stock_qty > 0 ? '#22c55e' : 'white',
-                                            color: form.stock_qty > 0 ? 'white' : '#64748b',
-                                            fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        {form.stock_qty > 0 && <Check size={16} />}
-                                        In Stock
-                                    </button>
-                                    <button
-                                        onClick={() => setForm({ ...form, stock_qty: '0' })}
-                                        style={{
-                                            flex: 1, padding: '0.75rem', borderRadius: 10, border: '2px solid',
-                                            borderColor: form.stock_qty === '0' || form.stock_qty === 0 ? '#ef4444' : '#e2e8f0',
-                                            background: form.stock_qty === '0' || form.stock_qty === 0 ? '#ef4444' : 'white',
-                                            color: form.stock_qty === '0' || form.stock_qty === 0 ? 'white' : '#64748b',
-                                            fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        {(form.stock_qty === '0' || form.stock_qty === 0) && <Check size={16} />}
-                                        Out of Stock
-                                    </button>
+                             <div>
+                                <label className="label">Current Stock Quantity *</label>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <input 
+                                        className="input" 
+                                        type="number" 
+                                        placeholder="Quantity" 
+                                        style={{ flex: 1 }}
+                                        value={form.stock_qty} 
+                                        onChange={e => setForm({ ...form, stock_qty: e.target.value })} 
+                                    />
+                                    <div style={{
+                                        padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0',
+                                        background: parseInt(form.stock_qty || 0) > 0 ? '#ecfdf5' : '#fef2f2',
+                                        color: parseInt(form.stock_qty || 0) > 0 ? '#059669' : '#dc2626',
+                                        fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase'
+                                    }}>
+                                        {parseInt(form.stock_qty || 0) > 0 ? 'Available' : 'Sold Out'}
+                                    </div>
                                 </div>
                             </div>
                         </div>
