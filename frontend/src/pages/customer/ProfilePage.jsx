@@ -236,9 +236,9 @@ export default function ProfilePage() {
                             <QRCodeSVG 
                                 id="customer-qr-code"
                                 value={`${window.location.origin}/delivery/scan/${user?.id}`}
-                                size={180}
-                                level="H"
-                                includeMargin={false}
+                                size={200}
+                                level="Q"
+                                includeMargin={true}
                                 className="relative z-0 rounded-2xl"
                             />
                             

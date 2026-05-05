@@ -193,26 +193,36 @@ export default function DeliveryDashboard() {
             const html5QrCode = new Html5Qrcode("qr-reader")
             qrScannerRef.current = html5QrCode
             
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+            // Higher FPS and better aspect ratio for mobile reliability
+            const config = { 
+                fps: 20, 
+                qrbox: (viewfinderWidth, viewfinderHeight) => {
+                    const minEdge = Math.min(viewfinderWidth, viewfinderHeight)
+                    const qrboxSize = Math.floor(minEdge * 0.7)
+                    return { width: qrboxSize, height: qrboxSize }
+                },
+                aspectRatio: 1.0
+            }
             
             html5QrCode.start(
                 { facingMode: "environment" },
                 config,
                 (decodedText) => {
-                    // QR content is: ${window.location.origin}/delivery/scan/${user?.id}
-                    const parts = decodedText.split('/')
-                    const scannedUserId = parts[parts.length - 1]
+                    console.log("Scanned QR:", decodedText)
+                    // Robust ID extraction: get the last non-empty segment
+                    const segments = decodedText.split('/').filter(Boolean)
+                    const scannedUserId = segments[segments.length - 1]
                     
-                    if (scannedUserId === scanModal.delivery.customerId) {
+                    if (scannedUserId === scanModal.delivery.customerId || decodedText.includes(scanModal.delivery.customerId)) {
                         setIsVerified(true)
                         toast.success('QR Verified!')
                         playSuccessSound()
-                        // Stop scanning after verification
                         html5QrCode.stop().then(() => {
                             qrScannerRef.current = null
-                        })
+                        }).catch(e => console.warn("Stop failed", e))
                     } else {
-                        setScanError("This QR does not match the customer for this delivery.")
+                        setScanError("Wrong QR. This belongs to another customer.")
+                        console.warn("Scan mismatch:", scannedUserId, "expected:", scanModal.delivery.customerId)
                     }
                 },
                 (errorMessage) => {
@@ -220,12 +230,12 @@ export default function DeliveryDashboard() {
                 }
             ).catch(err => {
                 console.error("Scanner error", err)
-                setScanError("Could not access camera. Please check permissions.")
+                setScanError("Could not access camera. Ensure you've granted camera permissions.")
             })
 
             return () => {
                 if (qrScannerRef.current) {
-                    qrScannerRef.current.stop().catch(err => console.error("Cleanup error", err))
+                    qrScannerRef.current.stop().catch(err => console.log("Cleanup stop", err))
                     qrScannerRef.current = null
                 }
             }
@@ -485,7 +495,17 @@ export default function DeliveryDashboard() {
                                 <div style={{ fontSize: '0.875rem', color: '#64748b', textAlign: 'center' }}>
                                     Point camera at the customer's Doorstep QR code
                                 </div>
-                                <div id="qr-reader" style={{ width: '100%', borderRadius: 12, overflow: 'hidden', background: '#000' }}></div>
+                                <div 
+                                    id="qr-reader" 
+                                    style={{ 
+                                        width: '100%', 
+                                        borderRadius: 12, 
+                                        overflow: 'hidden', 
+                                        background: '#000',
+                                        minHeight: 250,
+                                        border: '4px solid #f1f5f9'
+                                    }}
+                                ></div>
                                 {scanError && (
                                     <div style={{ padding: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <AlertCircle size={14} /> {scanError}
