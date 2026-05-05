@@ -4,6 +4,9 @@ import { cors } from 'hono/cors'
 type Bindings = {
   DB: D1Database
   ASSETS: R2Bucket
+  GMAIL_CLIENT_ID: string
+  GMAIL_CLIENT_SECRET: string
+  GMAIL_REFRESH_TOKEN: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -157,6 +160,60 @@ app.get('/subscriptions', async (c) => {
 /**
  * --- DELIVERIES ---
  */
+app.get('/deliveries/summary/:userId', async (c) => {
+  const userId = c.req.param('userId');
+  const date = c.req.query('date') || new Date().toISOString().split('T')[0];
+  const slot = c.req.query('slot') || 'morning';
+
+  try {
+    // 1. Get User Details
+    const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
+    if (!user) return c.json({ error: 'User not found' }, 404);
+
+    // 2. Get Subscriptions for this user
+    const subQuery = `
+      SELECT s.*, 
+      (SELECT json_group_array(json_object('id', si.id, 'product_id', si.product_id, 'quantity', si.quantity, 'price_at_time', si.price_at_time, 'products', json_object('name', p.name, 'size_label', p.size_label, 'price', p.price)))
+       FROM subscription_items si 
+       JOIN products p ON si.product_id = p.id 
+       WHERE si.subscription_id = s.id) as items
+      FROM subscriptions s
+      WHERE s.customer_id = ? AND s.status = 'active' AND s.delivery_slot = ?
+    `;
+    const { results: subs } = await c.env.DB.prepare(subQuery).bind(userId, slot).all();
+
+    // 3. Get One-time Orders for this user
+    const orderQuery = `
+      SELECT o.*,
+      (SELECT json_group_array(json_object('id', oi.id, 'product_id', oi.product_id, 'quantity', oi.quantity, 'price_at_time', oi.price_at_time, 'products', json_object('name', p.name, 'size_label', p.size_label)))
+       FROM order_items oi 
+       JOIN products p ON oi.product_id = p.id 
+       WHERE oi.order_id = o.id) as items
+      FROM orders o
+      WHERE o.customer_id = ? AND o.delivery_date = ? AND o.delivery_slot = ? AND o.status != 'cancelled'
+    `;
+    const { results: orders } = await c.env.DB.prepare(orderQuery).bind(userId, date, slot).all();
+
+    // 4. Get Pauses and Skips
+    const { results: pauses } = await c.env.DB.prepare("SELECT * FROM subscription_pauses WHERE pause_date = ?").bind(date).all();
+    const { results: skips } = await c.env.DB.prepare("SELECT * FROM partial_skips WHERE skip_date = ?").bind(date).all();
+    const { results: completed } = await c.env.DB.prepare("SELECT * FROM deliveries WHERE customer_id = ? AND delivery_date = ?").bind(userId, date).all();
+
+    return c.json({
+      user,
+      subscriptions: subs.map((s: any) => ({ ...s, items: JSON.parse(s.items) })),
+      orders: orders.map((o: any) => ({ ...o, items: JSON.parse(o.items) })),
+      pauses,
+      skips,
+      completed,
+      date,
+      slot
+    });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+})
+
 app.get('/deliveries', async (c) => {
   const date = c.req.query('date');
   if (!date) return c.json([]);
@@ -212,6 +269,98 @@ app.get('/orders', async (c) => {
     
     return c.json(formatted);
   } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+})
+
+/**
+ * --- EMAIL SERVICE (GMAIL API) ---
+ */
+async function getGmailAccessToken(env: Bindings) {
+  const params = new URLSearchParams();
+  params.append('client_id', env.GMAIL_CLIENT_ID);
+  params.append('client_secret', env.GMAIL_CLIENT_SECRET);
+  params.append('refresh_token', env.GMAIL_REFRESH_TOKEN);
+  params.append('grant_type', 'refresh_token');
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString()
+  });
+
+  const data: any = await res.json();
+  if (!res.ok) throw new Error(data.error_description || 'Failed to get access token');
+  return data.access_token;
+}
+
+app.post('/deliveries/email-qr', async (c) => {
+  const { userId, email, name, origin: frontendOrigin } = await c.req.json();
+  
+  if (!userId) return c.json({ error: 'User ID is required' }, 400);
+
+  // Fallback to request origin if frontendOrigin is not provided
+  const origin = frontendOrigin || new URL(c.req.url).origin;
+  const qrData = `${origin}/delivery/scan/${userId}`;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+
+  try {
+    const accessToken = await getGmailAccessToken(c.env);
+    
+    const subject = 'Your Digital Doorstep QR Code - Nandini Milk';
+    const body = `
+      <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <h2 style="color: #0f172a; margin-top: 0;">Hello ${name},</h2>
+        <p style="color: #64748b; line-height: 1.6;">Here is your unique <strong>Digital Doorstep QR Code</strong> for Nandini Milk delivery.</p>
+        
+        <div style="text-align: center; margin: 30px 0; background: #f8fafc; padding: 20px; border-radius: 12px;">
+          <img src="${qrImageUrl}" alt="Your QR Code" style="border: 4px solid white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+          <p style="margin-top: 10px; font-weight: bold; color: #2563eb;">Customer ID: ${userId.slice(-8).toUpperCase()}</p>
+        </div>
+
+        <p style="color: #64748b; font-size: 14px;"><strong>Instructions:</strong></p>
+        <ol style="color: #64748b; font-size: 14px; padding-left: 20px;">
+          <li>Print this QR code or display it on your door.</li>
+          <li>Our delivery partner will scan it every morning.</li>
+          <li>They will see exactly what to deliver based on your subscription.</li>
+        </ol>
+
+        <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 25px 0;">
+        <p style="color: #94a3b8; font-size: 12px; text-align: center;">Nandini Milk Delivery Management System</p>
+      </div>
+    `;
+
+    // Construct MIME message
+    const message = [
+      'Content-Type: text/html; charset="UTF-8"\r\n',
+      'MIME-Version: 1.0\r\n',
+      `To: ${email}\r\n`,
+      `Subject: ${subject}\r\n\r\n`,
+      body
+    ].join('');
+
+    const encodedMessage = btoa(unescape(encodeURIComponent(message)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const gmailRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ raw: encodedMessage })
+    });
+
+    if (!gmailRes.ok) {
+      const err = await gmailRes.json();
+      throw new Error(JSON.stringify(err));
+    }
+
+    return c.json({ success: true });
+  } catch (e: any) {
+    console.error('Email failed:', e.message);
     return c.json({ error: e.message }, 500);
   }
 })

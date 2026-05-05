@@ -26,6 +26,7 @@ import AdminSubscriptions from './pages/admin/AdminSubscriptions'
 
 // Delivery
 import DeliveryDashboard from './pages/delivery/DeliveryDashboard'
+import DeliveryScanPage from './pages/delivery/DeliveryScanPage'
 
 // Route Guards
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute'
@@ -80,6 +81,7 @@ export default function App() {
 
         {/* Delivery Routes */}
         <Route path="/delivery" element={<ProtectedRoute deliveryOnly><DeliveryDashboard /></ProtectedRoute>} />
+        <Route path="/delivery/scan/:userId" element={<ProtectedRoute deliveryOnly><DeliveryScanPage /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

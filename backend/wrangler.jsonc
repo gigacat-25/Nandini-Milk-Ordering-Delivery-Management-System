@@ -15,5 +15,10 @@
       "database_name": "nandini_db",
       "database_id": "0d162e7c-aa22-43aa-942c-b2bdb2e199fc"
     }
-  ]
+  ],
+  "vars": {
+    "GMAIL_CLIENT_ID": "YOUR_GMAIL_CLIENT_ID",
+    "GMAIL_CLIENT_SECRET": "YOUR_GMAIL_CLIENT_SECRET",
+    "GMAIL_REFRESH_TOKEN": "YOUR_GMAIL_REFRESH_TOKEN"
+  }
 }

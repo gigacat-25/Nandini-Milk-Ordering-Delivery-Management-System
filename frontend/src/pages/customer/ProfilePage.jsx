@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Save, MapPin, Navigation, Info, Download, Smartphone, ShieldCheck, Zap, Heart } from 'lucide-react'
+import { Save, MapPin, Navigation, Info, Download, Smartphone, ShieldCheck, Zap, Heart, QrCode, Mail } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { downloadQRCode } from '../../lib/qrUtils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUser } from '@clerk/clerk-react'
 import { renewAppAccess, useUserProfile, updateUserProfile } from '../../lib/useData'
@@ -10,18 +12,25 @@ import { usePWAStore } from '../../store'
 
 export default function ProfilePage() {
     const { user, isLoaded } = useUser()
-    const { data: userProfile, refetch: refetchProfile } = useUserProfile(user?.id)
+    const { data: userProfile, loading: profileLoading, error: profileError, refetch: refetchProfile } = useUserProfile(user?.id)
     const { deferredPrompt, clearPrompt } = usePWAStore()
 
-    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [paying, setPaying] = useState(false)
+    const [sendingEmail, setSendingEmail] = useState(false)
     const [profile, setProfile] = useState({
         address: '',
         delivery_instructions: '',
         google_maps_url: '',
         phone: ''
     })
+
+    const handleInstall = () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt()
+            clearPrompt()
+        }
+    }
 
     useEffect(() => {
         if (userProfile) {
@@ -31,7 +40,12 @@ export default function ProfilePage() {
                 google_maps_url: userProfile.google_maps_url || '',
                 phone: userProfile.phone || user?.primaryPhoneNumber?.phoneNumber || ''
             })
-            setLoading(false)
+        } else if (user) {
+            // Pre-fill phone if it's a new user
+            setProfile(prev => ({
+                ...prev,
+                phone: user.primaryPhoneNumber?.phoneNumber || ''
+            }))
         }
     }, [userProfile, user])
 
@@ -66,14 +80,32 @@ export default function ProfilePage() {
         }
     }
 
-    async function handleInstall() {
-        if (!deferredPrompt) return
-        deferredPrompt.prompt()
-        const { outcome } = await deferredPrompt.userChoice
-        if (outcome === 'accepted') {
-            toast.success('Thank you for installing the app!')
+    async function handleSendEmail() {
+        if (!user) return
+        setSendingEmail(true)
+        try {
+            // This will call the backend API we plan to implement
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/deliveries/email-qr`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userId: user.id,
+                    email: user.primaryEmailAddress?.emailAddress,
+                    name: user.fullName,
+                    origin: window.location.origin
+                })
+            })
+            
+            if (response.ok) {
+                toast.success('QR Code sent to your email!')
+            } else {
+                throw new Error('Failed to send email')
+            }
+        } catch (err) {
+            toast.error('Failed to send email. Please try again later.')
+        } finally {
+            setSendingEmail(false)
         }
-        clearPrompt()
     }
 
     const containerVariants = {
@@ -86,7 +118,7 @@ export default function ProfilePage() {
         visible: { y: 0, opacity: 1 }
     }
 
-    if (!isLoaded || loading) {
+    if (!isLoaded || profileLoading) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -178,6 +210,81 @@ export default function ProfilePage() {
                         >
                             {paying ? 'Authorizing...' : isExpired ? `Pay Subscription ₹150` : `Renew for ₹150`}
                         </button>
+                    </div>
+                </motion.div>
+
+                {/* Doorstep QR Code */}
+                <motion.div variants={itemVariants} className="card p-0 overflow-hidden mb-6 md:mb-10 border-slate-100 shadow-xl shadow-slate-200/40">
+                    <div className="p-5 md:p-6 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+                        <h2 className="text-[10px] md:text-xs font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <QrCode size={14} md:size={16} className="text-blue-500" />
+                            Your Doorstep Digital Card
+                        </h2>
+                    </div>
+                    
+                    <div className="p-6 md:p-10 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+                        <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 relative group overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-tr from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            
+                            {/* Scanning Animation Line */}
+                            <motion.div 
+                                animate={{ top: ['0%', '100%', '0%'] }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent z-10 opacity-40"
+                            />
+
+                            <QRCodeSVG 
+                                id="customer-qr-code"
+                                value={`${window.location.origin}/delivery/scan/${user?.id}`}
+                                size={180}
+                                level="H"
+                                includeMargin={false}
+                                className="relative z-0 rounded-2xl"
+                            />
+                            
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/40 opacity-0 group-hover:opacity-100 transition-all duration-500 backdrop-blur-[1px]">
+                                <div className="bg-blue-600 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-200 scale-90 group-hover:scale-100 transition-transform">
+                                    Doorstep ID
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 space-y-6 text-center md:text-left">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900">Seamless Deliveries</h3>
+                                <p className="text-slate-500 font-medium text-sm mt-1 leading-relaxed">
+                                    Stick this QR code at your door. Your delivery partner will scan it to see exactly what to deliver each morning.
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <motion.button
+                                    whileHover={{ scale: 1.02, y: -2 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => downloadQRCode(user?.id)}
+                                    className="flex-1 flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-xs hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"
+                                >
+                                    <Download size={16} /> Download PNG
+                                </motion.button>
+                                <motion.button
+                                    whileHover={{ scale: 1.02, y: -2 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={handleSendEmail}
+                                    type="button"
+                                    disabled={sendingEmail}
+                                    className="flex-1 flex items-center justify-center gap-2 bg-white text-slate-900 border border-slate-200 px-6 py-4 rounded-2xl font-black text-xs hover:bg-slate-50 transition-all"
+                                >
+                                    {sendingEmail ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
+                                            <span>Sending...</span>
+                                        </div>
+                                    ) : (
+                                        <><Mail size={16} /> Send to Email</>
+                                    )}
+                                </motion.button>
+                            </div>
+                        </div>
                     </div>
                 </motion.div>
 

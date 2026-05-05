@@ -109,6 +109,10 @@ export function useDeliveries(dateStr) {
     return useApiQuery(`/deliveries?date=${dateStr}`, [dateStr])
 }
 
+export function useDeliverySummary(userId, dateStr, slot) {
+    return useApiQuery(`/deliveries/summary/${userId}?date=${dateStr}&slot=${slot}`, [userId, dateStr, slot], null, { skip: !userId })
+}
+
 // --- Subscription Pauses ---
 export function useSubscriptionPauses(dateStr) {
     return useApiQuery(`/pauses?date=${dateStr}`, [dateStr])
