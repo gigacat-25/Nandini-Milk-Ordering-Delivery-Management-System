@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from 'react'
-import { CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, Lock, Camera, X, Image } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, Lock, Camera, X, Image, QrCode, PackageCheck, AlertCircle } from 'lucide-react'
+import { Html5Qrcode } from "html5-qrcode"
 import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, useDeliverySession, usePartialSkips, uploadDeliveryPhoto } from '../../lib/useData'
 import DeliveryNavbar from '../../components/DeliveryNavbar'
 import toast from 'react-hot-toast'
@@ -41,6 +42,13 @@ export default function DeliveryDashboard() {
 
     const [updatingId, setUpdatingId] = useState(null)
     const isSessionActive = !!deliverySession
+
+    // QR Scanning state
+    const [scanModal, setScanModal] = useState(null) // { delivery: d }
+    const [isScanning, setIsScanning] = useState(false)
+    const [scanError, setScanError] = useState(null)
+    const [isVerified, setIsVerified] = useState(false)
+    const qrScannerRef = useRef(null)
 
     // Photo capture state
     const [photoModal, setPhotoModal] = useState(null) // { delivery: d }
@@ -163,6 +171,66 @@ export default function DeliveryDashboard() {
 
         return [...activeSubs, ...orderDeliveries].filter(d => d.hasActiveItems)
     }, [subscriptions, customers, pauses, orders, completedDeliveries, date, partialSkips, activeSlot])
+
+    function openScanModal(d) {
+        setScanModal({ delivery: d })
+        setIsVerified(false)
+        setScanError(null)
+        setIsScanning(true)
+    }
+
+    function closeScanModal() {
+        if (qrScannerRef.current) {
+            qrScannerRef.current.stop().catch(err => console.error("Failed to stop scanner", err))
+            qrScannerRef.current = null
+        }
+        setScanModal(null)
+        setIsScanning(false)
+    }
+
+    useEffect(() => {
+        if (isScanning && scanModal && !isVerified) {
+            const html5QrCode = new Html5Qrcode("qr-reader")
+            qrScannerRef.current = html5QrCode
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => {
+                    // QR content is: ${window.location.origin}/delivery/scan/${user?.id}
+                    const parts = decodedText.split('/')
+                    const scannedUserId = parts[parts.length - 1]
+                    
+                    if (scannedUserId === scanModal.delivery.customerId) {
+                        setIsVerified(true)
+                        toast.success('QR Verified!')
+                        playSuccessSound()
+                        // Stop scanning after verification
+                        html5QrCode.stop().then(() => {
+                            qrScannerRef.current = null
+                        })
+                    } else {
+                        setScanError("This QR does not match the customer for this delivery.")
+                    }
+                },
+                (errorMessage) => {
+                    // Ignore noisy errors
+                }
+            ).catch(err => {
+                console.error("Scanner error", err)
+                setScanError("Could not access camera. Please check permissions.")
+            })
+
+            return () => {
+                if (qrScannerRef.current) {
+                    qrScannerRef.current.stop().catch(err => console.error("Cleanup error", err))
+                    qrScannerRef.current = null
+                }
+            }
+        }
+    }, [isScanning, scanModal, isVerified])
 
     function openPhotoModal(d) {
         setPhotoModal({ delivery: d })
@@ -379,11 +447,11 @@ export default function DeliveryDashboard() {
                             ) : (
                                 <button
                                     className="btn-primary"
-                                    onClick={() => openPhotoModal(d)}
+                                    onClick={() => openScanModal(d)}
                                     disabled={updatingId === d.id}
                                     style={{ width: '100%', justifyContent: 'center', padding: '0.75rem', fontSize: '0.9rem' }}
                                 >
-                                    <Camera size={16} />
+                                    <QrCode size={16} />
                                     Mark as Delivered
                                 </button>
                             )}
@@ -391,6 +459,74 @@ export default function DeliveryDashboard() {
                     ))}
                 </div>
             </div>
+
+            {/* QR Scan Modal */}
+            {scanModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1100,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '1.5rem',
+                        padding: '1.5rem', width: '100%', maxWidth: 440,
+                        display: 'flex', flexDirection: 'column', gap: '1rem'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>
+                                {isVerified ? '✅ QR Verified' : '🔍 Scan Customer QR'}
+                            </div>
+                            <button onClick={closeScanModal} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <X size={16} color="#64748b" />
+                            </button>
+                        </div>
+
+                        {!isVerified ? (
+                            <>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b', textAlign: 'center' }}>
+                                    Point camera at the customer's Doorstep QR code
+                                </div>
+                                <div id="qr-reader" style={{ width: '100%', borderRadius: 12, overflow: 'hidden', background: '#000' }}></div>
+                                {scanError && (
+                                    <div style={{ padding: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <AlertCircle size={14} /> {scanError}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ background: '#f0fdf4', border: '1px solid #b9f6ca', borderRadius: 12, padding: '1rem', textAlign: 'center' }}>
+                                    <div style={{ fontWeight: 800, color: '#166534', fontSize: '1.1rem' }}>{scanModal.delivery.customer}</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#15803d' }}>Identity confirmed successfully</div>
+                                </div>
+
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Items to hand over:</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        {scanModal.delivery.itemArray.map((item, i) => (
+                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', background: '#f8fafc', padding: '0.75rem', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                                <span style={{ fontWeight: 700 }}>{item.quantity}x {item.products?.name}</span>
+                                                <span style={{ color: '#64748b' }}>{item.products?.size_label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <button
+                                    className="btn-primary"
+                                    onClick={() => {
+                                        const d = scanModal.delivery
+                                        closeScanModal()
+                                        openPhotoModal(d)
+                                    }}
+                                    style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}
+                                >
+                                    <Camera size={18} /> Take Delivery Photo
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Photo Capture Modal */}
             {photoModal && (
@@ -416,7 +552,7 @@ export default function DeliveryDashboard() {
 
                         {/* Customer info */}
                         <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem', fontSize: '0.875rem', color: '#374151' }}>
-                            <strong>{photoModal.delivery.customer}</strong> — {photoModal.delivery.items}
+                            <strong>{photoModal.delivery.customer}</strong> — {photoModal.delivery.itemArray.map(i => `${i.quantity}x ${i.products?.name}`).join(', ')}
                         </div>
 
                         {/* Photo Preview / Picker */}
