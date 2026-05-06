@@ -1,53 +1,18 @@
-import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
+import { useState, useEffect, useRef } from 'react'
+import { OlaMaps } from 'olamaps-web-sdk'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { useUser } from '@clerk/clerk-react'
 import { useUserProfile, useDeliverySession } from '../../lib/useData'
 import { Navigation, Home, Truck, MapPin, RefreshCw, ChevronLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { renderToStaticMarkup } from 'react-dom/server'
-
-// Custom Icons using Lucide + Leaflet DivIcon
-const createDivIcon = (Icon, color) => L.divIcon({
-    html: renderToStaticMarkup(
-        <div style={{ 
-            background: 'white', 
-            borderRadius: '50%', 
-            padding: '8px', 
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: `3px solid ${color}`
-        }}>
-            <Icon size={24} color={color} />
-        </div>
-    ),
-    className: '',
-    iconSize: [44, 44],
-    iconAnchor: [22, 44]
-})
-
-const truckIcon = createDivIcon(Truck, '#2563eb')
-const homeIcon = createDivIcon(Home, '#059669')
-
-// Map component to handle bounds
-function MapBounds({ userPos, truckPos }) {
-    const map = useMap()
-    useEffect(() => {
-        if (userPos && truckPos) {
-            const bounds = L.latLngBounds([userPos, truckPos])
-            map.fitBounds(bounds, { padding: [50, 50] })
-        } else if (userPos) {
-            map.setView(userPos, 15)
-        }
-    }, [userPos, truckPos, map])
-    return null
-}
 
 export default function LiveTracking() {
     const { user } = useUser()
     const { data: profile } = useUserProfile(user?.id)
+    const mapContainerRef = useRef(null)
+    const mapRef = useRef(null)
+    const markersRef = useRef({})
     
     // Determine slot based on time
     const [slot] = useState(() => {
@@ -64,10 +29,86 @@ export default function LiveTracking() {
         return () => clearInterval(interval)
     }, [refetchSession])
 
-    const userPos = profile?.latitude && profile?.longitude ? [profile.latitude, profile.longitude] : null
-    const truckPos = session?.current_lat && session?.current_lng ? [session.current_lat, session.current_lng] : null
-
+    const userPos = profile?.latitude && profile?.longitude ? { lat: profile.latitude, lng: profile.longitude } : null
+    const truckPos = session?.current_lat && session?.current_lng ? { lat: session.current_lat, lng: session.current_lng } : null
     const isActive = !!session?.active
+
+    // Initialize Map
+    useEffect(() => {
+        if (!mapContainerRef.current) return
+
+        const olaMaps = new OlaMaps({
+            apiKey: import.meta.env.VITE_OLA_MAPS_API_KEY
+        })
+
+        const myMap = olaMaps.init({
+            style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
+            container: mapContainerRef.current,
+            center: userPos ? [userPos.lng, userPos.lat] : [77.5946, 12.9716],
+            zoom: 15
+        })
+
+        mapRef.current = myMap
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove()
+                mapRef.current = null
+            }
+        }
+    }, [])
+
+    // Manage Markers and Bounds
+    useEffect(() => {
+        const map = mapRef.current
+        if (!map) return
+
+        // 1. Home Marker
+        if (userPos) {
+            if (!markersRef.current.home) {
+                const el = document.createElement('div')
+                el.innerHTML = `
+                    <div style="background: white; border-radius: 50%; padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; border: 3px solid #059669;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    </div>
+                `
+                markersRef.current.home = new maplibregl.Marker({ element: el })
+                    .setLngLat([userPos.lng, userPos.lat])
+                    .addTo(map)
+            } else {
+                markersRef.current.home.setLngLat([userPos.lng, userPos.lat])
+            }
+        }
+
+        // 2. Truck Marker
+        if (truckPos && isActive) {
+            if (!markersRef.current.truck) {
+                const el = document.createElement('div')
+                el.innerHTML = `
+                    <div style="background: white; border-radius: 50%; padding: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; border: 3px solid #2563eb;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-5l-4-4h-3v10h3Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+                    </div>
+                `
+                markersRef.current.truck = new maplibregl.Marker({ element: el })
+                    .setLngLat([truckPos.lng, truckPos.lat])
+                    .addTo(map)
+            } else {
+                markersRef.current.truck.setLngLat([truckPos.lng, truckPos.lat])
+            }
+        } else if (markersRef.current.truck) {
+            markersRef.current.truck.remove()
+            markersRef.current.truck = null
+        }
+
+        // 3. Fit Bounds
+        if (userPos && truckPos && isActive) {
+            const bounds = new maplibregl.LngLatBounds()
+            bounds.extend([userPos.lng, userPos.lat])
+            bounds.extend([truckPos.lng, truckPos.lat])
+            map.fitBounds(bounds, { padding: 100, duration: 2000 })
+        } else if (userPos) {
+            map.easeTo({ center: [userPos.lng, userPos.lat], zoom: 15, duration: 1000 })
+        }
+    }, [userPos, truckPos, isActive])
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -97,31 +138,7 @@ export default function LiveTracking() {
                     </div>
                 )}
 
-                <MapContainer 
-                    center={userPos || [12.9716, 77.5946]} 
-                    zoom={13} 
-                    style={{ height: '100%', width: '100%' }}
-                    zoomControl={false}
-                >
-                    <TileLayer
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    />
-                    
-                    {userPos && (
-                        <Marker position={userPos} icon={homeIcon}>
-                            <Popup>Your Delivery Location</Popup>
-                        </Marker>
-                    )}
-
-                    {truckPos && isActive && (
-                        <Marker position={truckPos} icon={truckIcon}>
-                            <Popup>Moove Delivery Truck</Popup>
-                        </Marker>
-                    )}
-
-                    <MapBounds userPos={userPos} truckPos={truckPos && isActive ? truckPos : null} />
-                </MapContainer>
+                <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
 
                 {/* Status Overlay */}
                 {isActive && truckPos && (
@@ -147,3 +164,4 @@ export default function LiveTracking() {
         </div>
     )
 }
+

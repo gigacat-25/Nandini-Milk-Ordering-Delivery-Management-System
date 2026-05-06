@@ -1,44 +1,17 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock, Truck } from 'lucide-react'
 import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos, API_BASE } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
 import { useUser } from '@clerk/clerk-react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { OlaMaps } from 'olamaps-web-sdk'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 
 
-function FitBoundsComponent({ deliveries, customers, session }) {
-    const map = useMap()
-
-    useEffect(() => {
-        const points = []
-        
-        // Add driver point
-        if (session?.current_lat && session?.current_lng) {
-            points.push([session.current_lat, session.current_lng])
-        }
-
-        // Add customer points
-        deliveries.filter(d => d.status !== 'cancelled').forEach(d => {
-            const cust = customers.find(c => c.id === d.customerId)
-            if (cust?.lat && cust?.lng) {
-                points.push([cust.lat, cust.lng])
-            }
-        })
-
-        if (points.length > 0) {
-            const bounds = L.latLngBounds(points)
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
-        }
-    }, [deliveries, customers, session, map])
-
-    return null
-}
+const OLA_API_KEY = import.meta.env.VITE_OLA_MAPS_API_KEY
 
 export default function AdminDelivery() {
     const { user } = useUser()
@@ -58,73 +31,13 @@ export default function AdminDelivery() {
     const [photoLightbox, setPhotoLightbox] = useState(null) // photo URL string
     const { data: deliveryPhotos, refetch: refetchPhotos } = useDeliveryPhotos(date)
     const [showMap, setShowMap] = useState(false)
+    const [mapLoaded, setMapLoaded] = useState(false)
 
-    const getPhotoUrl = (url) => {
-        if (!url) return null
-        if (url.startsWith('http')) return url
-        if (url.startsWith('/api/assets/')) {
-            // Replace /api with API_BASE
-            return url.replace('/api', API_BASE)
-        }
-        return `${API_BASE}${url}`
-    }
-
-    // Poll for updates every 10 seconds to keep the admin view in sync with drivers
-    useEffect(() => {
-        const interval = setInterval(() => {
-           refetchOrders()
-           refetchComp()
-           refetchPhotos()
-           refetchSkips()
-           refetchSession() // Also refetch session to get live location
-        }, 10000)
-        return () => clearInterval(interval)
-    }, [refetchOrders, refetchComp, refetchPhotos, refetchSkips, refetchSession])
-
-    // Custom Map Icons
-    const truckIcon = useMemo(() => {
-        const iconMarkup = renderToStaticMarkup(
-            <div style={{
-                background: '#2563eb', color: 'white', padding: '8px', 
-                borderRadius: '50%', border: '3px solid white', 
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-                <Truck size={20} />
-            </div>
-        )
-        return L.divIcon({
-            html: iconMarkup,
-            className: '',
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
-        })
-    }, [])
-
-    const customerIcon = (isDelivered) => {
-        const iconMarkup = renderToStaticMarkup(
-            <div style={{
-                background: isDelivered ? '#059669' : '#f59e0b', 
-                color: 'white', padding: '6px', 
-                borderRadius: '50%', border: '2px solid white', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-                {isDelivered ? <CheckCircle size={14} /> : <MapPin size={14} />}
-            </div>
-        )
-        return L.divIcon({
-            html: iconMarkup,
-            className: '',
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-        })
-    }
-
-
-    function newtoISOStringDate() {
-        return new Date().toISOString().split('T')[0];
-    }
+    // Ola Maps Refs
+    const mapContainerRef = useRef(null)
+    const mapRef = useRef(null)
+    const markersRef = useRef({}) // Map of id -> marker
+    const driverMarkerRef = useRef(null)
 
     // Generate daily delivery sheet from active subscriptions and one-off orders
     const deliveries = useMemo(() => {
@@ -244,6 +157,182 @@ export default function AdminDelivery() {
 
         return [...activeSubs, ...orderDeliveries].filter(d => d.slot === activeSlot)
     }, [subscriptions, customers, pauses, orders, completedDeliveries, date, partialSkips, activeSlot])
+
+    const getPhotoUrl = (url) => {
+        if (!url) return null
+        if (url.startsWith('http')) return url
+        if (url.startsWith('/api/assets/')) {
+            // Replace /api with API_BASE
+            return url.replace('/api', API_BASE)
+        }
+        return `${API_BASE}${url}`
+    }
+
+    // Poll for updates every 10 seconds to keep the admin view in sync with drivers
+    useEffect(() => {
+        const interval = setInterval(() => {
+           refetchOrders()
+           refetchComp()
+           refetchPhotos()
+           refetchSkips()
+           refetchSession() // Also refetch session to get live location
+        }, 10000)
+        return () => clearInterval(interval)
+    }, [refetchOrders, refetchComp, refetchPhotos, refetchSkips, refetchSession])
+
+    // Ola Maps Logic
+    useEffect(() => {
+        if (!showMap || !mapContainerRef.current || mapRef.current) return
+
+        const olaMaps = new OlaMaps({
+            apiKey: OLA_API_KEY,
+        })
+
+        const map = olaMaps.init({
+            style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
+            container: mapContainerRef.current,
+            center: [77.5946, 12.9716],
+            zoom: 12,
+        })
+
+        map.on('load', () => {
+            mapRef.current = map
+            setMapLoaded(true)
+        })
+
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove()
+                mapRef.current = null
+                markersRef.current = {}
+                driverMarkerRef.current = null
+            }
+            setMapLoaded(false)
+        }
+    }, [showMap])
+
+    // Update Markers & Bounds — depends on mapLoaded to re-run after map initialises
+    useEffect(() => {
+        if (!mapRef.current) return
+        const map = mapRef.current
+        const olaMaps = new OlaMaps({ apiKey: OLA_API_KEY })
+
+        // 1. Handle Customer Markers
+        const activeDeliveries = deliveries.filter(d => d.status !== 'cancelled')
+        
+        // Remove old markers that are no longer in deliveries
+        const currentIds = new Set(activeDeliveries.map(d => d.id))
+        Object.keys(markersRef.current).forEach(id => {
+            if (!currentIds.has(id)) {
+                markersRef.current[id].remove()
+                delete markersRef.current[id]
+            }
+        })
+
+        // Add or update markers
+        activeDeliveries.forEach(d => {
+            const cust = customers.find(c => c.id === d.customerId)
+            // DB stores latitude / longitude (not lat / lng)
+            if (!cust?.latitude || !cust?.longitude) return
+
+            const isDelivered = d.status === 'delivered'
+            const color = isDelivered ? '#059669' : '#f59e0b'
+            
+            // Create custom element
+            const el = document.createElement('div')
+            el.style.background = color
+            el.style.color = 'white'
+            el.style.width = '28px'
+            el.style.height = '28px'
+            el.style.borderRadius = '50%'
+            el.style.border = '2px solid white'
+            el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+            el.style.display = 'flex'
+            el.style.alignItems = 'center'
+            el.style.justifyContent = 'center'
+            el.innerHTML = isDelivered 
+                ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'
+                : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'
+
+            if (!markersRef.current[d.id]) {
+                const marker = olaMaps.addMarker({ element: el })
+                    .setLngLat([cust.longitude, cust.latitude])
+                    .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`
+                        <div style="padding: 0.25rem; font-family: sans-serif;">
+                            <div style="font-weight: 800; color: #1e293b;">${d.customer}</div>
+                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">${d.address}</div>
+                            <div style="margin-top: 0.5rem; padding: 0.2rem 0.5rem; background: ${isDelivered ? '#f0fdf4' : '#fff7ed'}; color: ${isDelivered ? '#166534' : '#9a3412'}; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-align: center; text-transform: uppercase;">
+                                ${d.status}
+                            </div>
+                        </div>
+                    `))
+                    .addTo(map)
+                markersRef.current[d.id] = marker
+            } else {
+                // Update existing marker position and icon if needed
+                markersRef.current[d.id].setLngLat([cust.longitude, cust.latitude])
+            }
+        })
+
+        // 2. Handle Driver Marker
+        if (deliverySession?.current_lat && deliverySession?.current_lng) {
+            if (!driverMarkerRef.current) {
+                const el = document.createElement('div')
+                el.style.background = '#2563eb'
+                el.style.color = 'white'
+                el.style.width = '40px'
+                el.style.height = '40px'
+                el.style.borderRadius = '50%'
+                el.style.border = '3px solid white'
+                el.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.4)'
+                el.style.display = 'flex'
+                el.style.alignItems = 'center'
+                el.style.justifyContent = 'center'
+                el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-5l-4-4h-3v9Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>'
+
+                const marker = olaMaps.addMarker({ element: el })
+                    .setLngLat([deliverySession.current_lng, deliverySession.current_lat])
+                    .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`
+                        <div style="padding: 0.25rem; font-family: sans-serif;">
+                            <div style="font-weight: 800; color: #1e293b;">🚚 Driver Live</div>
+                            <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px;">Last updated: ${new Date(deliverySession.updated_at).toLocaleTimeString()}</div>
+                        </div>
+                    `))
+                    .addTo(map)
+                driverMarkerRef.current = marker
+            } else {
+                driverMarkerRef.current.setLngLat([deliverySession.current_lng, deliverySession.current_lat])
+            }
+        }
+
+        // 3. Fit Bounds
+        const bounds = new maplibregl.LngLatBounds()
+        let hasPoints = false
+
+        if (deliverySession?.current_lat && deliverySession?.current_lng) {
+            bounds.extend([deliverySession.current_lng, deliverySession.current_lat])
+            hasPoints = true
+        }
+
+        activeDeliveries.forEach(d => {
+            const cust = customers.find(c => c.id === d.customerId)
+            if (cust?.latitude && cust?.longitude) {
+                bounds.extend([cust.longitude, cust.latitude])
+                hasPoints = true
+            }
+        })
+
+        if (hasPoints) {
+            map.fitBounds(bounds, { padding: 50, maxZoom: 15 })
+        }
+
+    }, [deliveries, customers, deliverySession, mapLoaded])
+
+
+    function newtoISOStringDate() {
+        return new Date().toISOString().split('T')[0];
+    }
+
 
     async function handleStartSession() {
         setSessionLoading(true)
@@ -475,66 +564,7 @@ export default function AdminDelivery() {
                                 </div>
                             </div>
 
-                            <MapContainer 
-                                center={[12.9716, 77.5946]} 
-                                zoom={13} 
-                                style={{ height: '100%', width: '100%' }}
-                                zoomControl={false}
-                            >
-                                <TileLayer
-                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                />
-                                
-                                {/* All Customer Markers */}
-                                {deliveries.filter(d => d.status !== 'cancelled').map(d => {
-                                    const cust = customers.find(c => c.id === d.customerId)
-                                    if (!cust?.lat || !cust?.lng) return null
-                                    
-                                    return (
-                                        <Marker 
-                                            key={d.id} 
-                                            position={[cust.lat, cust.lng]} 
-                                            icon={customerIcon(d.status === 'delivered')}
-                                        >
-                                            <Popup>
-                                                <div style={{ padding: '0.25rem' }}>
-                                                    <div style={{ fontWeight: 800 }}>{d.customer}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{d.address}</div>
-                                                    <div style={{ 
-                                                        marginTop: '0.5rem', 
-                                                        padding: '0.2rem 0.5rem', 
-                                                        background: d.status === 'delivered' ? '#f0fdf4' : '#fff7ed',
-                                                        color: d.status === 'delivered' ? '#166534' : '#9a3412',
-                                                        borderRadius: 4,
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 700,
-                                                        textAlign: 'center'
-                                                    }}>
-                                                        {d.status.toUpperCase()}
-                                                    </div>
-                                                </div>
-                                            </Popup>
-                                        </Marker>
-                                    )
-                                })}
-
-                                {/* Driver Marker */}
-                                {deliverySession?.current_lat && deliverySession?.current_lng && (
-                                    <Marker 
-                                        position={[deliverySession.current_lat, deliverySession.current_lng]} 
-                                        icon={truckIcon}
-                                        zIndexOffset={1000}
-                                    >
-                                        <Popup>
-                                            <div style={{ fontWeight: 800 }}>🚚 Driver Live</div>
-                                            <div style={{ fontSize: '0.7rem' }}>Last updated: {new Date(deliverySession.updated_at).toLocaleTimeString()}</div>
-                                        </Popup>
-                                    </Marker>
-                                )}
-
-                                <FitBoundsComponent deliveries={deliveries} customers={customers} session={deliverySession} />
-                            </MapContainer>
+                            <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
                         </div>
                     )}
 
