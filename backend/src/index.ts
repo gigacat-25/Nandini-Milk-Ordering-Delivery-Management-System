@@ -94,19 +94,21 @@ app.put('/products/global/cutoffs', async (c) => {
  */
 app.post('/users/upsert', async (c) => {
   const body = await c.req.json();
-  const { id, email, phone, full_name } = body;
+  const { id, email, phone, full_name, latitude, longitude } = body;
   console.log(`Upserting user: ${id} (${full_name})`);
   
   try {
     // SQLite Upsert syntax
     await c.env.DB.prepare(`
-      INSERT INTO users (id, email, phone, full_name, role)
-      VALUES (?, ?, ?, ?, 'customer')
+      INSERT INTO users (id, email, phone, full_name, role, latitude, longitude)
+      VALUES (?, ?, ?, ?, 'customer', ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         email = excluded.email,
         phone = excluded.phone,
-        full_name = excluded.full_name
-    `).bind(id, email, phone, full_name).run();
+        full_name = excluded.full_name,
+        latitude = COALESCE(excluded.latitude, users.latitude),
+        longitude = COALESCE(excluded.longitude, users.longitude)
+    `).bind(id, email, phone, full_name, latitude || null, longitude || null).run();
 
     const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
     return c.json(user);
@@ -560,6 +562,16 @@ app.post('/sessions/end', async (c) => {
     }
 })
 
+app.post('/sessions/location', async (c) => {
+    try {
+        const { dateStr, slot, lat, lng } = await c.req.json();
+        await c.env.DB.prepare("UPDATE delivery_sessions SET current_lat = ?, current_lng = ? WHERE session_date = ? AND slot = ?").bind(lat, lng, dateStr, slot).run();
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+})
+
 /**
  * --- MISC ---
  */
@@ -625,13 +637,17 @@ app.put('/users/:id', async (c) => {
                 address = ?, 
                 delivery_instructions = ?, 
                 google_maps_url = ?, 
-                phone = ?
+                phone = ?,
+                latitude = ?,
+                longitude = ?
             WHERE id = ?
         `).bind(
             body.address, 
             body.delivery_instructions, 
             body.google_maps_url, 
             body.phone, 
+            body.latitude,
+            body.longitude,
             id
         ).run();
         return c.json({ success: true });

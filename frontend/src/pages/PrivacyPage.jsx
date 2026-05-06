@@ -13,7 +13,7 @@ export default function PrivacyPage() {
                 
                 <div style={{ color: '#475569', fontSize: '1.125rem', lineHeight: 1.8, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <p>
-                        Your privacy is critically important to us at <strong>Nandini Milk Store - Vaderhalli</strong>. This policy explains what information we gather when you use our app and how we handle it.
+                        Your privacy is critically important to us at <strong>Moove Store - Vaderhalli</strong>. This policy explains what information we gather when you use our app and how we handle it.
                     </p>
 
                     <h2 style={{ fontSize: '1.5rem', color: '#0f172a', margin: '1rem 0 0' }}>1. Data We Collect</h2>

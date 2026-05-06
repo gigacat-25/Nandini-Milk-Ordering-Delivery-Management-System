@@ -47,7 +47,7 @@ export default function Navbar() {
                         <Milk size={22} className="text-white" />
                     </div>
                     <div>
-                        <div className="text-base font-black text-slate-900 leading-none">Nandini</div>
+                        <div className="text-base font-black text-slate-900 leading-none">Moove</div>
                         <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Vaderhalli Store</div>
                     </div>
                 </Link>

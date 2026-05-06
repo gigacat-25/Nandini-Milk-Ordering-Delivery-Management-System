@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
-import { ShoppingBag, RefreshCw, IndianRupee, ChevronRight, Package, ArrowUpRight, TrendingUp } from 'lucide-react'
+import { ShoppingBag, RefreshCw, IndianRupee, ChevronRight, Package, ArrowUpRight, TrendingUp, Navigation, Truck } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { motion } from 'framer-motion'
-import { useOrders, useSubscriptions, usePartialSkips, useUserProfile } from '../../lib/useData'
+import { useOrders, useSubscriptions, usePartialSkips, useUserProfile, useDeliverySession } from '../../lib/useData'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import Navbar from '../../components/Navbar'
 
@@ -13,6 +13,11 @@ export default function CustomerDashboard() {
     const todayDateStr = new Date().toISOString().split('T')[0]
     const { data: partialSkips, loading: skipsLoading } = usePartialSkips(todayDateStr)
     const { data: profile, loading: profileLoading } = useUserProfile(user?.id)
+
+    const currentHour = new Date().getHours()
+    const activeSlot = currentHour < 14 ? 'morning' : 'evening'
+    const { data: activeSession } = useDeliverySession(todayDateStr, activeSlot)
+    const isTrackingAvailable = !!activeSession?.active
 
     const todayDeliveries = (subsData || []).filter(s => s.status === 'active').map(s => {
         const activeItems = s.items?.filter(i => !partialSkips?.some(ps => ps.target_id === s.id && ps.product_id === i.product_id)) || []
@@ -72,6 +77,36 @@ export default function CustomerDashboard() {
                     </div>
                 </motion.div>
 
+                {/* Tracking Banner if active */}
+                {isTrackingAvailable && (
+                    <motion.div 
+                        variants={itemVariants}
+                        className="mb-6 overflow-hidden relative group"
+                    >
+                        <div className="absolute inset-0 bg-blue-600 opacity-90 group-hover:opacity-100 transition-opacity rounded-2xl shadow-lg shadow-blue-200"></div>
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <Truck size={120} />
+                        </div>
+                        <div className="relative p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shadow-inner">
+                                    <Navigation size={24} className="animate-pulse" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black tracking-tight">Delivery is on the way! 🚚</h3>
+                                    <p className="text-blue-100 text-sm font-medium">Your {activeSlot} milk run has started. Track your delivery partner in real-time.</p>
+                                </div>
+                            </div>
+                            <Link 
+                                to="/tracking" 
+                                className="bg-white text-blue-600 px-6 py-3 rounded-xl font-extrabold text-sm hover:bg-blue-50 transition-all shadow-lg hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+                            >
+                                Track Now <ArrowUpRight size={18} />
+                            </Link>
+                        </div>
+                    </motion.div>
+                )}
+
                 {/* Dashboard Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     
@@ -115,7 +150,9 @@ export default function CustomerDashboard() {
                         <motion.div variants={itemVariants} className="card p-0 overflow-hidden">
                             <div className="p-6 border-b border-slate-50 flex items-center justify-between">
                                 <h3 className="text-lg font-bold text-slate-800">Today's Schedule</h3>
-                                <div className="badge badge-success lowercase font-semibold">Live status</div>
+                                <div className={`badge ${isTrackingAvailable ? 'badge-primary' : 'badge-success'} lowercase font-semibold`}>
+                                    {isTrackingAvailable ? 'Live tracking active' : 'Live status'}
+                                </div>
                             </div>
                             <div className="p-6">
                                 {todayDeliveries.length === 0 ? (

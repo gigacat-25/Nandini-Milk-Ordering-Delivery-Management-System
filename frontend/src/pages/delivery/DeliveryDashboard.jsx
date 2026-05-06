@@ -242,6 +242,49 @@ export default function DeliveryDashboard() {
         }
     }, [isScanning, scanModal, isVerified])
 
+    // Live tracking GPS polling
+    useEffect(() => {
+        let interval;
+        if (isSessionActive) {
+            const reportLocation = () => {
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(async (position) => {
+                        const { latitude, longitude } = position.coords;
+                        try {
+                            await fetch(`${import.meta.env.VITE_API_URL}/sessions/location`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    dateStr: date,
+                                    slot: activeSlot,
+                                    lat: latitude,
+                                    lng: longitude
+                                })
+                            });
+                        } catch (err) {
+                            console.error("Failed to report location", err);
+                        }
+                    }, (err) => {
+                        console.warn("Geolocation error:", err.message);
+                    }, {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 0
+                    });
+                }
+            };
+
+            // Report immediately on start
+            reportLocation();
+            // Then every 30 seconds
+            interval = setInterval(reportLocation, 30000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isSessionActive, date, activeSlot]);
+
     function openPhotoModal(d) {
         setPhotoModal({ delivery: d })
         setPhotoFile(null)

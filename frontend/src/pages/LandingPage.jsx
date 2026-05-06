@@ -54,7 +54,7 @@ export default function LandingPage() {
                             <Milk size={20} className="text-white" />
                         </motion.div>
                         <div className="hidden sm:block">
-                            <div className="text-sm font-black text-slate-900 leading-none">Nandini Milk</div>
+                            <div className="text-sm font-black text-slate-900 leading-none">Moove</div>
                             <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Vaderhalli Store</div>
                         </div>
                     </div>
@@ -196,14 +196,14 @@ export default function LandingPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
-                    className="max-w-7xl mx-auto rounded-[48px] overflow-hidden relative"
+                    className="max-w-7xl mx-auto rounded-[48px] overflow-hidden relative isolate"
                 >
-                    <div className="absolute inset-0 bg-[#0f172a] -z-10"></div>
-                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-600/20 to-transparent -z-10"></div>
+                    <div className="absolute inset-0 bg-slate-900 -z-10"></div>
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-600/30 to-transparent -z-10"></div>
                     
                     <div className="px-8 py-20 md:py-32 text-center text-white max-w-3xl mx-auto">
                         <h2 className="text-4xl md:text-6xl font-black mb-8 leading-[0.95] tracking-tighter">Never miss your morning milk again</h2>
-                        <p className="text-slate-400 text-lg font-medium mb-12">Join hundreds of families in Vaderhalli who start their day fresh with Nandini.</p>
+                        <p className="text-slate-400 text-lg font-medium mb-12">Join hundreds of families in Vaderhalli who start their day fresh with Moove.</p>
                         <Link to="/auth?signup=1" className="bg-white text-slate-900 px-10 py-5 rounded-2xl font-black text-xl shadow-2xl hover:bg-blue-50 transition-all hover:scale-105 inline-block">
                             Create My Account
                         </Link>
@@ -220,7 +220,7 @@ export default function LandingPage() {
                                 <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
                                     <Milk size={20} className="text-white" />
                                 </div>
-                                <span className="text-xl font-black tracking-tight">Nandini Vaderhalli</span>
+                                <span className="text-xl font-black tracking-tight">Moove Vaderhalli</span>
                             </div>
                             <p className="text-sm text-slate-400 font-medium text-center md:text-left">
                                 Official retailer of Nandini Milk & Dairy Products.<br />Serving Vaderhalli, Bangalore since 2020.
@@ -236,7 +236,7 @@ export default function LandingPage() {
                     
                     <div className="flex flex-col md:flex-row justify-between items-center border-t border-slate-50 pt-8 gap-4">
                         <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">
-                            © 2026 NANDINI MILK STORE • VADERHALLI, BENGALURU
+                            © 2026 MOOVE STORE • VADERHALLI, BENGALURU
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>

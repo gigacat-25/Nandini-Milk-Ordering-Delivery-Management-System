@@ -1,6 +1,6 @@
-# 🥛 Nandini Milk Ordering & Delivery Management System
+# 🥛 Moove — Premium Milk Delivery Management System
 
-A premium, full-stack enterprise solution for managing milk subscriptions, product orders, and daily delivery logistics for the Nandini Milk Store (Vaderhalli, Bengaluru).
+A premium, full-stack enterprise solution for managing milk subscriptions, product orders, and daily delivery logistics for the Moove Store (Vaderhalli, Bengaluru). Formerly known as the Nandini Milk Management System.
 
 ![Project Banner](https://img.shields.io/badge/Status-Active-brightgreen)
 ![Tech Stack](https://img.shields.io/badge/Stack-React_19_|_Cloudflare_|_Clerk-orange)

@@ -1,10 +1,44 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock } from 'lucide-react'
+import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock, Truck } from 'lucide-react'
 import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos, API_BASE } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
 import { useUser } from '@clerk/clerk-react'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import { renderToStaticMarkup } from 'react-dom/server'
+
+
+
+function FitBoundsComponent({ deliveries, customers, session }) {
+    const map = useMap()
+
+    useEffect(() => {
+        const points = []
+        
+        // Add driver point
+        if (session?.current_lat && session?.current_lng) {
+            points.push([session.current_lat, session.current_lng])
+        }
+
+        // Add customer points
+        deliveries.filter(d => d.status !== 'cancelled').forEach(d => {
+            const cust = customers.find(c => c.id === d.customerId)
+            if (cust?.lat && cust?.lng) {
+                points.push([cust.lat, cust.lng])
+            }
+        })
+
+        if (points.length > 0) {
+            const bounds = L.latLngBounds(points)
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+        }
+    }, [deliveries, customers, session, map])
+
+    return null
+}
 
 export default function AdminDelivery() {
     const { user } = useUser()
@@ -23,6 +57,7 @@ export default function AdminDelivery() {
     const isSessionActive = !!deliverySession
     const [photoLightbox, setPhotoLightbox] = useState(null) // photo URL string
     const { data: deliveryPhotos, refetch: refetchPhotos } = useDeliveryPhotos(date)
+    const [showMap, setShowMap] = useState(false)
 
     const getPhotoUrl = (url) => {
         if (!url) return null
@@ -41,9 +76,50 @@ export default function AdminDelivery() {
            refetchComp()
            refetchPhotos()
            refetchSkips()
+           refetchSession() // Also refetch session to get live location
         }, 10000)
         return () => clearInterval(interval)
-    }, [refetchOrders, refetchComp, refetchPhotos, refetchSkips])
+    }, [refetchOrders, refetchComp, refetchPhotos, refetchSkips, refetchSession])
+
+    // Custom Map Icons
+    const truckIcon = useMemo(() => {
+        const iconMarkup = renderToStaticMarkup(
+            <div style={{
+                background: '#2563eb', color: 'white', padding: '8px', 
+                borderRadius: '50%', border: '3px solid white', 
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+                <Truck size={20} />
+            </div>
+        )
+        return L.divIcon({
+            html: iconMarkup,
+            className: '',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        })
+    }, [])
+
+    const customerIcon = (isDelivered) => {
+        const iconMarkup = renderToStaticMarkup(
+            <div style={{
+                background: isDelivered ? '#059669' : '#f59e0b', 
+                color: 'white', padding: '6px', 
+                borderRadius: '50%', border: '2px solid white', 
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+                {isDelivered ? <CheckCircle size={14} /> : <MapPin size={14} />}
+            </div>
+        )
+        return L.divIcon({
+            html: iconMarkup,
+            className: '',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        })
+    }
 
 
     function newtoISOStringDate() {
@@ -307,6 +383,19 @@ export default function AdminDelivery() {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <button 
+                                className={`btn-secondary ${showMap ? 'active' : ''}`}
+                                onClick={() => setShowMap(!showMap)}
+                                style={{ 
+                                    padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem', 
+                                    background: showMap ? '#eff6ff' : 'white',
+                                    borderColor: showMap ? '#3b82f6' : '#e2e8f0',
+                                    color: showMap ? '#2563eb' : '#64748b',
+                                    display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                }}
+                            >
+                                <MapPin size={14} /> {showMap ? 'Hide Map' : 'Show Map'}
+                            </button>
                             <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto', padding: '0.5rem 0.75rem', borderRadius: 10, fontSize: '0.85rem' }} />
                             <button className="btn-primary" onClick={exportCSV} style={{ padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem' }}><Download size={14} /> Export</button>
                         </div>
@@ -370,6 +459,84 @@ export default function AdminDelivery() {
                             )}
                         </div>
                     </div>
+
+                    {/* Live Tracking Map View */}
+                    {showMap && (
+                        <div className="card fade-in" style={{ padding: 0, overflow: 'hidden', height: '400px', marginBottom: '1.5rem', position: 'relative', border: '1px solid #e2e8f0' }}>
+                            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563eb' }}></span> Driver Position
+                                </div>
+                                <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }}></span> Pending Delivery
+                                </div>
+                                <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#059669' }}></span> Delivered
+                                </div>
+                            </div>
+
+                            <MapContainer 
+                                center={[12.9716, 77.5946]} 
+                                zoom={13} 
+                                style={{ height: '100%', width: '100%' }}
+                                zoomControl={false}
+                            >
+                                <TileLayer
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                />
+                                
+                                {/* All Customer Markers */}
+                                {deliveries.filter(d => d.status !== 'cancelled').map(d => {
+                                    const cust = customers.find(c => c.id === d.customerId)
+                                    if (!cust?.lat || !cust?.lng) return null
+                                    
+                                    return (
+                                        <Marker 
+                                            key={d.id} 
+                                            position={[cust.lat, cust.lng]} 
+                                            icon={customerIcon(d.status === 'delivered')}
+                                        >
+                                            <Popup>
+                                                <div style={{ padding: '0.25rem' }}>
+                                                    <div style={{ fontWeight: 800 }}>{d.customer}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{d.address}</div>
+                                                    <div style={{ 
+                                                        marginTop: '0.5rem', 
+                                                        padding: '0.2rem 0.5rem', 
+                                                        background: d.status === 'delivered' ? '#f0fdf4' : '#fff7ed',
+                                                        color: d.status === 'delivered' ? '#166534' : '#9a3412',
+                                                        borderRadius: 4,
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 700,
+                                                        textAlign: 'center'
+                                                    }}>
+                                                        {d.status.toUpperCase()}
+                                                    </div>
+                                                </div>
+                                            </Popup>
+                                        </Marker>
+                                    )
+                                })}
+
+                                {/* Driver Marker */}
+                                {deliverySession?.current_lat && deliverySession?.current_lng && (
+                                    <Marker 
+                                        position={[deliverySession.current_lat, deliverySession.current_lng]} 
+                                        icon={truckIcon}
+                                        zIndexOffset={1000}
+                                    >
+                                        <Popup>
+                                            <div style={{ fontWeight: 800 }}>🚚 Driver Live</div>
+                                            <div style={{ fontSize: '0.7rem' }}>Last updated: {new Date(deliverySession.updated_at).toLocaleTimeString()}</div>
+                                        </Popup>
+                                    </Marker>
+                                )}
+
+                                <FitBoundsComponent deliveries={deliveries} customers={customers} session={deliverySession} />
+                            </MapContainer>
+                        </div>
+                    )}
 
                     {/* Stats Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>

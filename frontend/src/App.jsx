@@ -15,6 +15,7 @@ import SubscriptionsPage from './pages/customer/SubscriptionsPage'
 import PreviousOrdersPage from './pages/customer/PreviousOrdersPage'
 import WalletPage from './pages/customer/WalletPage'
 import ProfilePage from './pages/customer/ProfilePage'
+import LiveTracking from './pages/customer/LiveTracking'
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/payment" element={<ProtectedRoute><CustomerLayout><WalletPage /></CustomerLayout></ProtectedRoute>} />
         <Route path="/wallet" element={<ProtectedRoute><CustomerLayout><WalletPage /></CustomerLayout></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><CustomerLayout><ProfilePage /></CustomerLayout></ProtectedRoute>} />
+        <Route path="/tracking" element={<ProtectedRoute><CustomerLayout><LiveTracking /></CustomerLayout></ProtectedRoute>} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />

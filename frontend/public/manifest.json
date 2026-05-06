@@ -1,7 +1,7 @@
 {
-    "name": "Nandini Milk Management",
-    "short_name": "Nandini Milk",
-    "description": "Premium milk ordering and delivery management system for Nandini Milk Store, Vaderhalli, Bengaluru.",
+    "name": "Moove Milk Management",
+    "short_name": "Moove",
+    "description": "Premium milk ordering and delivery management system for Moove Store, Vaderhalli, Bengaluru.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useUser } from '@clerk/clerk-react'
 import { renewAppAccess, useUserProfile, updateUserProfile } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
+import MapPicker from '../../components/MapPicker'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import { usePWAStore } from '../../store'
@@ -22,7 +23,9 @@ export default function ProfilePage() {
         address: '',
         delivery_instructions: '',
         google_maps_url: '',
-        phone: ''
+        phone: '',
+        latitude: null,
+        longitude: null
     })
 
     const handleInstall = () => {
@@ -38,7 +41,9 @@ export default function ProfilePage() {
                 address: userProfile.address || '',
                 delivery_instructions: userProfile.delivery_instructions || '',
                 google_maps_url: userProfile.google_maps_url || '',
-                phone: userProfile.phone || user?.primaryPhoneNumber?.phoneNumber || ''
+                phone: userProfile.phone || user?.primaryPhoneNumber?.phoneNumber || '',
+                latitude: userProfile.latitude || null,
+                longitude: userProfile.longitude || null
             })
         } else if (user) {
             // Pre-fill phone if it's a new user
@@ -304,23 +309,26 @@ export default function ProfilePage() {
                         
                         <div className="space-y-6 md:space-y-8">
                             <div className="space-y-3">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Google Maps Pin (Share Link)</label>
-                                <div className="relative group">
-                                    <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
-                                    <input
-                                        type="url"
-                                        className="input !pl-12 !py-4 font-bold text-sm"
-                                        placeholder="Paste maps link here..."
-                                        value={profile.google_maps_url}
-                                        onChange={e => setProfile({ ...profile, google_maps_url: e.target.value })}
-                                    />
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pin your exact location</label>
+                                <MapPicker 
+                                    initialPosition={profile.latitude ? { lat: profile.latitude, lng: profile.longitude } : null}
+                                    onLocationChange={(pos) => setProfile(prev => ({ ...prev, latitude: pos.lat, longitude: pos.lng }))}
+                                    onAddressChange={(addr, isAuto) => {
+                                        // Overwrite address if it's empty OR if it was explicitly requested via "Use My Location"
+                                        if (!profile.address || isAuto) {
+                                            setProfile(prev => ({ ...prev, address: addr }))
+                                        }
+                                    }}
+                                />
+                                <div className="text-[9px] font-bold text-slate-400 px-1">
+                                    Dragging the pin helps our partner find your exact gate.
                                 </div>
                             </div>
 
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Contact Number</label>
                                 <div className="relative group">
-                                    <Navigation size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                                    <Smartphone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
                                     <input
                                         type="tel"
                                         className="input !pl-12 !py-4 font-bold text-sm"

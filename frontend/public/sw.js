@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nandini-milk-v1';
+const CACHE_NAME = 'moove-milk-v1';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',

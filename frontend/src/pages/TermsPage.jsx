@@ -13,7 +13,7 @@ export default function TermsPage() {
                 
                 <div style={{ color: '#475569', fontSize: '1.125rem', lineHeight: 1.8, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <p>
-                        Welcome to the <strong>Nandini Milk Store - Vaderhalli</strong> Delivery Application. By using our app, you agree to these terms. Please read them carefully.
+                        Welcome to the <strong>Moove Store - Vaderhalli</strong> Delivery Application. By using our app, you agree to these terms. Please read them carefully.
                     </p>
 
                     <h2 style={{ fontSize: '1.5rem', color: '#0f172a', margin: '1rem 0 0' }}>1. Subscriptions and Daily Deliveries</h2>

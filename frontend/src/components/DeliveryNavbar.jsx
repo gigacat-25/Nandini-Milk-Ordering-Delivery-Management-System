@@ -9,7 +9,7 @@ export default function DeliveryNavbar() {
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', paddingBottom: '0.1rem' }}>
                         🥛
                     </div>
-                    <span>Nandini<span style={{ color: '#60a5fa' }}>Delivery</span></span>
+                    <span>Moove<span style={{ color: '#60a5fa' }}>Delivery</span></span>
                 </div>
             </div>
 

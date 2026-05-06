@@ -69,7 +69,7 @@ export default function AdminDashboard() {
                 {/* Header */}
                 <motion.div variants={itemVariants} className="mb-8">
                     <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">System Overview</h1>
-                    <p className="text-slate-500 font-medium">Monitoring Nandini Milk • Vaderhalli Operations</p>
+                    <p className="text-slate-500 font-medium">Monitoring Moove • Vaderhalli Operations</p>
                 </motion.div>
 
                 {/* Stats Grid */}
