@@ -263,6 +263,7 @@ export default function OrderPage() {
                                         )}
                                     </div>
                                 </motion.div>
+                            )}
                             {step === 2 && (
                                 <motion.div key="step2" initial="hidden" animate="visible" exit={{ opacity: 0, x: -10 }} variants={containerVariants} className="space-y-6">
                                     <div className="card p-6 md:p-10 space-y-8 border-slate-100 shadow-xl shadow-slate-200/30">
