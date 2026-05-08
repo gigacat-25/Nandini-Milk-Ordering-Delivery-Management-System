@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock, Truck } from 'lucide-react'
+import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock, Truck, Route, Navigation } from 'lucide-react'
 import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos, API_BASE, getOlaMapsToken } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
@@ -29,12 +29,16 @@ export default function AdminDelivery() {
     const { data: deliveryPhotos, refetch: refetchPhotos } = useDeliveryPhotos(date)
     const [showMap, setShowMap] = useState(false)
     const [mapLoaded, setMapLoaded] = useState(false)
+    const [optimizedRoute, setOptimizedRoute] = useState([]) // ordered delivery stops
+    const [routeLoading, setRouteLoading] = useState(false)
+    const [routeStats, setRouteStats] = useState(null) // { totalKm, totalMin }
 
     // Ola Maps Refs
     const mapContainerRef = useRef(null)
     const mapRef = useRef(null)
     const markersRef = useRef({}) // Map of id -> marker
     const driverMarkerRef = useRef(null)
+    const routeLayerRef = useRef(false) // track if route layer added
 
     // Generate daily delivery sheet from active subscriptions and one-off orders
     const deliveries = useMemo(() => {
@@ -170,6 +174,154 @@ export default function AdminDelivery() {
         getOlaMapsToken().then(setOlaToken).catch(console.error)
     }, [])
 
+    // ── Route Optimization ──────────────────────────────────────────
+    // Nearest-neighbour greedy TSP starting from driver position (or first stop)
+    function nearestNeighbour(stops, startLat, startLng) {
+        if (stops.length === 0) return []
+        const remaining = [...stops]
+        const ordered = []
+        let curLat = startLat
+        let curLng = startLng
+        while (remaining.length > 0) {
+            let bestIdx = 0
+            let bestDist = Infinity
+            remaining.forEach((s, i) => {
+                const d = Math.hypot(s.lat - curLat, s.lng - curLng)
+                if (d < bestDist) { bestDist = d; bestIdx = i }
+            })
+            const next = remaining.splice(bestIdx, 1)[0]
+            ordered.push(next)
+            curLat = next.lat
+            curLng = next.lng
+        }
+        return ordered
+    }
+
+    async function optimizeRoute() {
+        if (!olaToken) return
+        setRouteLoading(true)
+        setOptimizedRoute([])
+        setRouteStats(null)
+        try {
+            // Build stops from deliveries that have coordinates
+            const activeDeliveries = deliveries.filter(d => d.status !== 'cancelled')
+            const stops = activeDeliveries
+                .map(d => {
+                    const cust = customers.find(c => c.id === d.customerId)
+                    if (!cust?.latitude || !cust?.longitude) return null
+                    return {
+                        id: d.id,
+                        customer: d.customer,
+                        address: d.address,
+                        phone: d.phone,
+                        status: d.status,
+                        lat: Number(cust.latitude),
+                        lng: Number(cust.longitude),
+                        google_maps: d.google_maps,
+                    }
+                })
+                .filter(Boolean)
+
+            if (stops.length < 2) {
+                toast.error('Need at least 2 customers with saved GPS coordinates to optimize route.')
+                setRouteLoading(false)
+                return
+            }
+
+            // Use driver position if available, else first stop
+            const startLat = deliverySession?.current_lat ?? stops[0].lat
+            const startLng = deliverySession?.current_lng ?? stops[0].lng
+            const ordered = nearestNeighbour(stops, startLat, startLng)
+            setOptimizedRoute(ordered)
+
+            // Call Ola Maps Directions API for the full polyline + stats
+            // Build waypoints: origin -> each stop in order
+            const origin = `${startLat},${startLng}`
+            const destination = `${ordered[ordered.length - 1].lat},${ordered[ordered.length - 1].lng}`
+            const waypoints = ordered.slice(0, -1).map(s => `${s.lat},${s.lng}`).join('|')
+
+            const url = `https://api.olamaps.io/routing/v1/directions?origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ''}&mode=driving&alternatives=false&steps=false&overview=full&language=en&traffic_metadata=false`
+
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${olaToken}` }
+            })
+            const data = await res.json()
+
+            const route = data?.routes?.[0]
+            if (route && mapRef.current) {
+                const { map } = mapRef.current
+                // Decode polyline points
+                const points = route.overview_polyline?.points
+                const coords = points ? decodePolyline(points) : []
+
+                // Remove old route layer/source
+                if (routeLayerRef.current) {
+                    try { map.removeLayer('route-line'); map.removeSource('route-source') } catch (_) {}
+                    routeLayerRef.current = false
+                }
+
+                if (coords.length > 0) {
+                    map.addSource('route-source', {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            geometry: { type: 'LineString', coordinates: coords }
+                        }
+                    })
+                    map.addLayer({
+                        id: 'route-line',
+                        type: 'line',
+                        source: 'route-source',
+                        layout: { 'line-join': 'round', 'line-cap': 'round' },
+                        paint: { 'line-color': '#2563eb', 'line-width': 4, 'line-opacity': 0.85 }
+                    })
+                    routeLayerRef.current = true
+                }
+
+                // Calculate stats
+                const legs = route.legs || []
+                const totalM = legs.reduce((s, l) => s + (l.distance?.value || 0), 0)
+                const totalS = legs.reduce((s, l) => s + (l.duration?.value || 0), 0)
+                setRouteStats({
+                    totalKm: (totalM / 1000).toFixed(1),
+                    totalMin: Math.round(totalS / 60)
+                })
+            } else {
+                // No route from API — just show ordered markers, estimate straight-line
+                let totalKm = 0
+                let prevLat = startLat, prevLng = startLng
+                ordered.forEach(s => {
+                    totalKm += Math.hypot(s.lat - prevLat, s.lng - prevLng) * 111
+                    prevLat = s.lat; prevLng = s.lng
+                })
+                setRouteStats({ totalKm: totalKm.toFixed(1), totalMin: Math.round(totalKm * 3) })
+            }
+
+            toast.success(`Route optimized — ${ordered.length} stops sorted!`)
+        } catch (err) {
+            console.error('Route optimization error:', err)
+            toast.error('Could not fetch route. Showing estimated order.')
+        } finally {
+            setRouteLoading(false)
+        }
+    }
+
+    // Decode Google/Ola encoded polyline to [lng, lat] pairs for MapLibre
+    function decodePolyline(encoded) {
+        const coords = []
+        let index = 0, lat = 0, lng = 0
+        while (index < encoded.length) {
+            let b, shift = 0, result = 0
+            do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5 } while (b >= 0x20)
+            lat += result & 1 ? ~(result >> 1) : result >> 1
+            shift = 0; result = 0
+            do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5 } while (b >= 0x20)
+            lng += result & 1 ? ~(result >> 1) : result >> 1
+            coords.push([lng / 1e5, lat / 1e5])
+        }
+        return coords
+    }
+
 
     // Ola Maps Logic
     useEffect(() => {
@@ -261,13 +413,14 @@ export default function AdminDelivery() {
         // Add or update markers
         activeDeliveries.forEach(d => {
             const cust = customers.find(c => c.id === d.customerId)
-            // DB stores latitude / longitude (not lat / lng)
             if (!cust?.latitude || !cust?.longitude) return
 
             const isDelivered = d.status === 'delivered'
             const color = isDelivered ? '#059669' : '#f59e0b'
-            
-            // Create custom element
+            // Show optimized order number if route is computed
+            const routeIdx = optimizedRoute.findIndex(s => s.id === d.id)
+            const label = routeIdx >= 0 ? String(routeIdx + 1) : ''
+
             const el = document.createElement('div')
             el.style.background = color
             el.style.color = 'white'
@@ -279,9 +432,11 @@ export default function AdminDelivery() {
             el.style.display = 'flex'
             el.style.alignItems = 'center'
             el.style.justifyContent = 'center'
-            el.innerHTML = isDelivered 
+            el.style.fontWeight = '800'
+            el.style.fontSize = '11px'
+            el.innerHTML = isDelivered
                 ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'
-                : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>'
+                : (label || '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>')
 
             if (!markersRef.current[d.id]) {
                 const marker = olaMaps.addMarker({ element: el })
@@ -369,7 +524,7 @@ export default function AdminDelivery() {
             console.log('AdminDelivery: No customer coordinates found, staying at default center')
         }
 
-    }, [deliveries, customers, deliverySession, mapLoaded])
+    }, [deliveries, customers, deliverySession, mapLoaded, optimizedRoute])
 
 
     function newtoISOStringDate() {
@@ -528,6 +683,21 @@ export default function AdminDelivery() {
                             >
                                 <MapPin size={14} /> {showMap ? 'Hide Map' : 'Show Map'}
                             </button>
+                            {showMap && (
+                                <button
+                                    onClick={optimizeRoute}
+                                    disabled={routeLoading}
+                                    style={{
+                                        padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem',
+                                        background: routeLoading ? '#e2e8f0' : '#2563eb', color: routeLoading ? '#94a3b8' : 'white',
+                                        border: 'none', cursor: routeLoading ? 'not-allowed' : 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700
+                                    }}
+                                >
+                                    {routeLoading ? <Loader2 size={14} className="spin" /> : <Route size={14} />}
+                                    {routeLoading ? 'Optimizing...' : 'Optimize Route'}
+                                </button>
+                            )}
                             <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto', padding: '0.5rem 0.75rem', borderRadius: 10, fontSize: '0.85rem' }} />
                             <button className="btn-primary" onClick={exportCSV} style={{ padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem' }}><Download size={14} /> Export</button>
                         </div>
@@ -594,20 +764,75 @@ export default function AdminDelivery() {
 
                     {/* Live Tracking Map View */}
                     {showMap && (
-                        <div className="card fade-in" style={{ padding: 0, overflow: 'hidden', height: '400px', marginBottom: '1.5rem', position: 'relative', border: '1px solid #e2e8f0' }}>
-                            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563eb' }}></span> Driver Position
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <div className="card fade-in" style={{ padding: 0, overflow: 'hidden', height: '420px', position: 'relative', border: '1px solid #e2e8f0' }}>
+                                <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563eb' }}></span> Driver
+                                    </div>
+                                    <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }}></span> Pending
+                                    </div>
+                                    <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#059669' }}></span> Delivered
+                                    </div>
                                 </div>
-                                <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }}></span> Pending Delivery
-                                </div>
-                                <div style={{ background: 'white', padding: '0.5rem 0.8rem', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#059669' }}></span> Delivered
-                                </div>
+                                <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
                             </div>
 
-                            <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
+                            {/* Route Stats Bar */}
+                            {routeStats && (
+                                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '0.75rem 1.25rem', marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1d4ed8', fontWeight: 700 }}>
+                                        <Route size={16} /> Optimized Route
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.875rem', color: '#1e3a8a', fontWeight: 600 }}>📍 {optimizedRoute.length} stops</span>
+                                        <span style={{ fontSize: '0.875rem', color: '#1e3a8a', fontWeight: 600 }}>🛣️ ~{routeStats.totalKm} km</span>
+                                        <span style={{ fontSize: '0.875rem', color: '#1e3a8a', fontWeight: 600 }}>⏱️ ~{routeStats.totalMin} min</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Optimized Stop List */}
+                            {optimizedRoute.length > 0 && (
+                                <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginTop: '0.75rem' }}>
+                                    <div style={{ padding: '0.75rem 1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 800, fontSize: '0.875rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <Navigation size={15} /> Delivery Order (Optimized)
+                                    </div>
+                                    {optimizedRoute.map((stop, i) => (
+                                        <div key={stop.id} style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.875rem',
+                                            padding: '0.75rem 1rem',
+                                            borderBottom: i < optimizedRoute.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                            background: stop.status === 'delivered' ? '#f0fdf4' : 'white'
+                                        }}>
+                                            <div style={{
+                                                width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                                                background: stop.status === 'delivered' ? '#059669' : '#2563eb',
+                                                color: 'white', display: 'flex', alignItems: 'center',
+                                                justifyContent: 'center', fontWeight: 800, fontSize: '0.8rem'
+                                            }}>{i + 1}</div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>{stop.customer}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.1rem' }}>
+                                                    <span>📍 {stop.address}</span>
+                                                    <span>📞 {stop.phone}</span>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                                                {stop.status === 'delivered' && <span style={{ fontSize: '0.7rem', background: '#d1fae5', color: '#065f46', padding: '0.2rem 0.5rem', borderRadius: 999, fontWeight: 700 }}>✓ Done</span>}
+                                                {stop.google_maps && (
+                                                    <a href={stop.google_maps} target="_blank" rel="noreferrer"
+                                                        style={{ background: '#eff6ff', color: '#2563eb', padding: '0.3rem 0.6rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                        <ExternalLink size={11} /> Maps
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
