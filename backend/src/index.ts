@@ -97,38 +97,59 @@ app.put('/products/global/cutoffs', async (c) => {
  */
 app.post('/users/upsert', async (c) => {
   const body = await c.req.json();
+  console.log('[POST /users/upsert] Body:', JSON.stringify(body));
   const { id, email, phone, full_name, latitude, longitude, house_no, area, address_label } = body;
-  console.log(`Upserting user: ${id} (${full_name})`);
-  
+
   try {
-    // SQLite Upsert syntax
-    await c.env.DB.prepare(`
+    const query = `
       INSERT INTO users (id, email, phone, full_name, role, latitude, longitude, house_no, area, address_label)
       VALUES (?, ?, ?, ?, 'customer', ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         email = COALESCE(excluded.email, users.email),
-        phone = COALESCE(excluded.phone, users.phone),
         full_name = COALESCE(excluded.full_name, users.full_name),
+        -- Prioritize app-provided phone if it exists, otherwise use Clerk phone
+        phone = COALESCE(excluded.phone, users.phone),
+        -- Prioritize app-provided address data
         latitude = COALESCE(excluded.latitude, users.latitude),
         longitude = COALESCE(excluded.longitude, users.longitude),
         house_no = COALESCE(excluded.house_no, users.house_no),
         area = COALESCE(excluded.area, users.area),
         address_label = COALESCE(excluded.address_label, users.address_label)
-    `).bind(id, email, phone, full_name, latitude || null, longitude || null, house_no || null, area || null, address_label || 'Home').run();
+    `;
 
-    const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
-    return c.json(user);
+    const result = await c.env.DB.prepare(query)
+      .bind(
+        id, 
+        email, 
+        phone, 
+        full_name, 
+        latitude ?? null, 
+        longitude ?? null, 
+        house_no ?? null, 
+        area ?? null, 
+        address_label ?? 'Home'
+      )
+      .run();
+    
+    console.log('[POST /users/upsert] Success:', result.meta);
+    return c.json({ success: true, meta: result.meta });
   } catch (e: any) {
-    console.error(`Upsert failed for ${id}:`, e.message);
+    console.error('[POST /users/upsert] Error:', e.message);
     return c.json({ error: e.message }, 500);
   }
 })
 
 app.get('/users/:id', async (c) => {
   const id = c.req.param('id');
-  const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+  const user: any = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
   if (!user) return c.json({ error: 'User not found' }, 404);
-  return c.json(user);
+  
+  // Add aliases for frontend compatibility
+  return c.json({
+    ...user,
+    lat: user.latitude,
+    lng: user.longitude
+  });
 })
 
 /**
@@ -326,6 +347,9 @@ app.post('/deliveries/email-qr', async (c) => {
           <p style="margin-top: 10px; font-weight: bold; color: #2563eb;">Customer ID: ${userId.slice(-8).toUpperCase()}</p>
         </div>
 
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <p style="color: #64748b; font-size: 14px;"><strong>Instructions:</strong></p>
         <ol style="color: #64748b; font-size: 14px; padding-left: 20px;">
           <li>Print this QR code or display it on your door.</li>
@@ -687,8 +711,15 @@ app.put('/users/:id/role', async (c) => {
 app.put('/users/:id', async (c) => {
     const id = c.req.param('id');
     const body = await c.req.json();
+    console.log(`[PUT /users/${id}] Updating with:`, JSON.stringify(body));
+
+    // Ensure numeric values for coordinates
+    const latitude = body.latitude !== undefined ? Number(body.latitude) : (body.lat !== undefined ? Number(body.lat) : null);
+    const longitude = body.longitude !== undefined ? Number(body.longitude) : (body.lng !== undefined ? Number(body.lng) : null);
+
     try {
-        await c.env.DB.prepare(`
+        // First try updating
+        const updateQuery = `
             UPDATE users SET 
                 address = ?, 
                 delivery_instructions = ?, 
@@ -700,20 +731,46 @@ app.put('/users/:id', async (c) => {
                 area = ?,
                 address_label = ?
             WHERE id = ?
-        `).bind(
+        `;
+        
+        const result = await c.env.DB.prepare(updateQuery).bind(
             body.address ?? null, 
             body.delivery_instructions ?? null, 
             body.google_maps_url ?? null, 
             body.phone ?? null, 
-            body.latitude ?? null, 
-            body.longitude ?? null, 
+            latitude, 
+            longitude, 
             body.house_no ?? null, 
             body.area ?? null, 
             body.address_label ?? 'Home',
             id
         ).run();
+
+        if (result.meta?.changes === 0) {
+            console.log(`[PUT /users/${id}] No record found, performing INSERT fallback`);
+            // If update fails, insert (fallback for new users)
+            const insertQuery = `
+                INSERT INTO users (id, phone, address, latitude, longitude, house_no, area, address_label, full_name, email, role)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'customer')
+            `;
+            await c.env.DB.prepare(insertQuery).bind(
+                id,
+                body.phone ?? null,
+                body.address ?? null,
+                latitude,
+                longitude,
+                body.house_no ?? null,
+                body.area ?? null,
+                body.address_label ?? 'Home',
+                body.full_name ?? null,
+                body.email ?? null
+            ).run();
+        }
+
+        console.log(`[PUT /users/${id}] Success`);
         return c.json({ success: true });
     } catch (e: any) {
+        console.error(`[PUT /users/${id}] Error:`, e.message);
         return c.json({ error: e.message }, 500);
     }
 })

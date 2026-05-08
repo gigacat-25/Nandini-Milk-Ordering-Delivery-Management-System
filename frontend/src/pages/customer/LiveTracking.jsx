@@ -36,8 +36,12 @@ export default function LiveTracking() {
         return () => clearInterval(interval)
     }, [refetchSession])
 
-    const userPos = profile?.latitude && profile?.longitude ? { lat: profile.latitude, lng: profile.longitude } : null
-    const truckPos = session?.current_lat && session?.current_lng ? { lat: session.current_lat, lng: session.current_lng } : null
+    const userPos = profile?.latitude != null && profile?.longitude != null 
+        ? { lat: Number(profile.latitude), lng: Number(profile.longitude) } 
+        : null
+    const truckPos = session?.current_lat != null && session?.current_lng != null 
+        ? { lat: Number(session.current_lat), lng: Number(session.current_lng) } 
+        : null
     const isActive = !!session?.active
 
     // Initialize Map
@@ -151,12 +155,18 @@ export default function LiveTracking() {
         }
 
         // 3. Fit Bounds
-        if (userPos && truckPos && isActive) {
-            const bounds = new maplibregl.LngLatBounds()
-            bounds.extend([userPos.lng, userPos.lat])
-            bounds.extend([truckPos.lng, truckPos.lat])
-            map.fitBounds(bounds, { padding: 100, duration: 2000 })
-        } else if (userPos) {
+        if (userPos && truckPos && isActive && !isNaN(userPos.lat) && !isNaN(truckPos.lat)) {
+            try {
+                const bounds = new maplibregl.LngLatBounds()
+                bounds.extend([userPos.lng, userPos.lat])
+                bounds.extend([truckPos.lng, truckPos.lat])
+                if (!bounds.isEmpty()) {
+                    map.fitBounds(bounds, { padding: 100, duration: 2000 })
+                }
+            } catch (e) {
+                console.warn('Failed to fit bounds:', e)
+            }
+        } else if (userPos && !isNaN(userPos.lat)) {
             map.easeTo({ center: [userPos.lng, userPos.lat], zoom: 15, duration: 1000 })
         }
     }, [userPos, truckPos, isActive, mapLoaded])

@@ -1,17 +1,26 @@
 import { Navigate } from 'react-router-dom'
-import { useUser } from '@clerk/clerk-react'
+import { useUser, useAuth } from '@clerk/clerk-react'
 import { useEffect } from 'react'
 import { upsertUser, useUserProfile } from '../lib/useData'
 
 export function ProtectedRoute({ children, adminOnly = false, deliveryOnly = false }) {
     const { isLoaded, isSignedIn, user } = useUser()
+    const { getToken } = useAuth()
     const { data: profile, loading: profileLoading } = useUserProfile(user?.id)
 
     useEffect(() => {
-        if (isSignedIn && user) {
-            upsertUser(user)
+        const syncUser = async () => {
+            if (isSignedIn && user) {
+                try {
+                    const token = await getToken();
+                    await upsertUser(user, token)
+                } catch (err) {
+                    console.error('Failed to sync user:', err)
+                }
+            }
         }
-    }, [isSignedIn, user])
+        syncUser()
+    }, [isSignedIn, user, getToken])
 
     if (!isLoaded || (isSignedIn && profileLoading)) return <div style={{ display: 'grid', placeItems: 'center', height: '100vh', color: '#64748b', fontWeight: 500 }}>Loading app...</div>
 
@@ -33,13 +42,22 @@ export function ProtectedRoute({ children, adminOnly = false, deliveryOnly = fal
 
 export function PublicRoute({ children }) {
     const { isLoaded, isSignedIn, user } = useUser()
+    const { getToken } = useAuth()
     const { data: profile, loading: profileLoading } = useUserProfile(user?.id)
 
     useEffect(() => {
-        if (isSignedIn && user) {
-            upsertUser(user)
+        const syncUser = async () => {
+            if (isSignedIn && user) {
+                try {
+                    const token = await getToken();
+                    await upsertUser(user, token)
+                } catch (err) {
+                    console.error('Failed to sync user:', err)
+                }
+            }
         }
-    }, [isSignedIn, user])
+        syncUser()
+    }, [isSignedIn, user, getToken])
 
     if (!isLoaded || (isSignedIn && profileLoading)) return <div style={{ display: 'grid', placeItems: 'center', height: '100vh', color: '#64748b', fontWeight: 500 }}>Loading app...</div>
 

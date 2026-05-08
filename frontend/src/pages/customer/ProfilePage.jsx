@@ -3,7 +3,7 @@ import { Save, MapPin, Navigation, Info, Download, Smartphone, ShieldCheck, Zap,
 import { QRCodeSVG } from 'qrcode.react'
 import { downloadQRCode } from '../../lib/qrUtils'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useUser } from '@clerk/clerk-react'
+import { useUser, useAuth } from '@clerk/clerk-react'
 import { renewAppAccess, useUserProfile, updateUserProfile } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import MapPicker from '../../components/MapPicker'
@@ -13,6 +13,7 @@ import { usePWAStore } from '../../store'
 
 export default function ProfilePage() {
     const { user, isLoaded } = useUser()
+    const { getToken } = useAuth()
     const { data: userProfile, loading: profileLoading, error: profileError, refetch: refetchProfile } = useUserProfile(user?.id)
     const { deferredPrompt, clearPrompt } = usePWAStore()
 
@@ -25,7 +26,10 @@ export default function ProfilePage() {
         google_maps_url: '',
         phone: '',
         latitude: null,
-        longitude: null
+        longitude: null,
+        house_no: '',
+        area: '',
+        address_label: 'Home'
     })
 
     const handleInstall = () => {
@@ -37,25 +41,26 @@ export default function ProfilePage() {
 
     useEffect(() => {
         if (userProfile) {
+            console.log('ProfilePage: Loading user profile from DB:', userProfile);
             setProfile({
                 address: userProfile.address || '',
                 delivery_instructions: userProfile.delivery_instructions || '',
                 google_maps_url: userProfile.google_maps_url || '',
-                phone: userProfile.phone || user?.primaryPhoneNumber?.phoneNumber || '',
-                latitude: userProfile.latitude || null,
-                longitude: userProfile.longitude || null,
+                phone: userProfile.phone !== null && userProfile.phone !== undefined ? userProfile.phone : (user?.primaryPhoneNumber?.phoneNumber || ''),
+                latitude: userProfile.latitude ?? null,
+                longitude: userProfile.longitude ?? null,
                 house_no: userProfile.house_no || '',
                 area: userProfile.area || '',
                 address_label: userProfile.address_label || 'Home'
             })
-        } else if (user) {
-            // Pre-fill phone if it's a new user
+        } else if (user && isLoaded) {
+            console.log('ProfilePage: No DB profile found, pre-filling from Clerk');
             setProfile(prev => ({
                 ...prev,
                 phone: user.primaryPhoneNumber?.phoneNumber || ''
             }))
         }
-    }, [userProfile, user])
+    }, [userProfile, user, isLoaded])
 
     async function handleSave(e) {
         e.preventDefault()
@@ -77,7 +82,8 @@ export default function ProfilePage() {
                 }).filter(([_, v]) => v !== undefined)
             );
 
-            await updateUserProfile(user.id, sanitizedProfile)
+            const token = await getToken();
+            await updateUserProfile(user.id, sanitizedProfile, token)
             toast.success('Delivery details saved successfully!')
             refetchProfile()
         } catch (err) {

@@ -15,21 +15,16 @@ export default function OrderPage() {
     const navigate = useNavigate()
     const { user } = useUser()
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
-    const [houseNo, setHouseNo] = useState(() => localStorage.getItem(`addr_${user?.id}_houseNo`) || '')
-    const [area, setArea] = useState(() => localStorage.getItem(`addr_${user?.id}_area`) || '')
-    const [address, setAddress] = useState(() => localStorage.getItem(`addr_${user?.id}_address`) || '')
-    const [phone, setPhone] = useState(() => localStorage.getItem(`addr_${user?.id}_phone`) || '')
-    const [addressLabel, setAddressLabel] = useState(() => localStorage.getItem(`addr_${user?.id}_label`) || 'Home')
-    const [instructions, setInstructions] = useState(() => localStorage.getItem(`addr_${user?.id}_instructions`) || '')
-    const [latitude, setLatitude] = useState(() => {
-        const val = localStorage.getItem(`addr_${user?.id}_lat`)
-        return val ? parseFloat(val) : null
-    })
-    const [longitude, setLongitude] = useState(() => {
-        const val = localStorage.getItem(`addr_${user?.id}_lng`)
-        return val ? parseFloat(val) : null
-    })
-    const [mapsUrl, setMapsUrl] = useState(() => localStorage.getItem(`addr_${user?.id}_mapsUrl`) || '')
+    const [houseNo, setHouseNo] = useState('')
+    const [area, setArea] = useState('')
+    const [address, setAddress] = useState('')
+    const [phone, setPhone] = useState('')
+    const [addressLabel, setAddressLabel] = useState('Home')
+    const [instructions, setInstructions] = useState('')
+    const [latitude, setLatitude] = useState(null)
+    const [longitude, setLongitude] = useState(null)
+    const [mapsUrl, setMapsUrl] = useState('')
+    const [storageLoaded, setStorageLoaded] = useState(false)
     
     const location = useLocation()
     const queryParams = new URLSearchParams(location.search)
@@ -85,7 +80,34 @@ export default function OrderPage() {
     }, [deliverySlot])
 
     const [orderId, setOrderId] = useState('')
-    const { data: profile } = useUserProfile(user?.id)
+    const { data: profile, refetch: refetchProfile } = useUserProfile(user?.id)
+
+    // 1. Load from localStorage ONLY when user.id is ready
+    useEffect(() => {
+        if (!user?.id || storageLoaded) return
+        
+        const storedHouseNo = localStorage.getItem(`addr_${user.id}_houseNo`)
+        const storedArea = localStorage.getItem(`addr_${user.id}_area`)
+        const storedAddress = localStorage.getItem(`addr_${user.id}_address`)
+        const storedPhone = localStorage.getItem(`addr_${user.id}_phone`)
+        const storedLabel = localStorage.getItem(`addr_${user.id}_label`)
+        const storedInstructions = localStorage.getItem(`addr_${user.id}_instructions`)
+        const storedLat = localStorage.getItem(`addr_${user.id}_lat`)
+        const storedLng = localStorage.getItem(`addr_${user.id}_lng`)
+        const storedMapsUrl = localStorage.getItem(`addr_${user.id}_mapsUrl`)
+
+        if (storedHouseNo) setHouseNo(storedHouseNo)
+        if (storedArea) setArea(storedArea)
+        if (storedAddress) setAddress(storedAddress)
+        if (storedPhone) setPhone(storedPhone)
+        if (storedLabel) setAddressLabel(storedLabel)
+        if (storedInstructions) setInstructions(storedInstructions)
+        if (storedLat) setLatitude(parseFloat(storedLat))
+        if (storedLng) setLongitude(parseFloat(storedLng))
+        if (storedMapsUrl) setMapsUrl(storedMapsUrl)
+        
+        setStorageLoaded(true)
+    }, [user?.id, storageLoaded])
     const walletBalance = profile?.wallet_balance || 0
     const hasActiveAppFee = profile?.app_fee_expiry ? new Date(profile.app_fee_expiry) > new Date() : false
 
@@ -94,23 +116,23 @@ export default function OrderPage() {
     const total = subtotal + deliveryFee
 
     useEffect(() => {
-        if (profile) {
+        if (profile && storageLoaded) {
             // Only overwrite if local state is empty to prevent snapping back while editing
-            if (!houseNo) setHouseNo(profile.house_no || '')
-            if (!area) setArea(profile.area || '')
-            if (!address) setAddress(profile.address || '')
-            if (!phone) setPhone(profile.phone || user?.primaryPhoneNumber?.phoneNumber || '')
-            if (!addressLabel || addressLabel === 'Home') setAddressLabel(profile.address_label || 'Home')
-            if (!instructions) setInstructions(profile.delivery_instructions || '')
-            if (!mapsUrl) setMapsUrl(profile.google_maps_url || '')
-            if (!latitude) setLatitude(profile.latitude || null)
-            if (!longitude) setLongitude(profile.longitude || null)
+            if (!houseNo && profile.house_no) setHouseNo(profile.house_no)
+            if (!area && profile.area) setArea(profile.area)
+            if (!address && profile.address) setAddress(profile.address)
+            if (!phone && profile.phone) setPhone(profile.phone)
+            if (!addressLabel || addressLabel === 'Home') if (profile.address_label) setAddressLabel(profile.address_label)
+            if (!instructions && profile.delivery_instructions) setInstructions(profile.delivery_instructions)
+            if (!mapsUrl && profile.google_maps_url) setMapsUrl(profile.google_maps_url)
+            if (!latitude && profile.latitude) setLatitude(profile.latitude)
+            if (!longitude && profile.longitude) setLongitude(profile.longitude)
         }
-    }, [profile])
+    }, [profile, storageLoaded])
 
-    // Save to localStorage whenever values change
+    // Save to localStorage whenever values change, but only AFTER initial load
     useEffect(() => {
-        if (!user?.id) return
+        if (!user?.id || !storageLoaded) return
         localStorage.setItem(`addr_${user.id}_houseNo`, houseNo)
         localStorage.setItem(`addr_${user.id}_area`, area)
         localStorage.setItem(`addr_${user.id}_address`, address)
@@ -120,7 +142,7 @@ export default function OrderPage() {
         localStorage.setItem(`addr_${user.id}_mapsUrl`, mapsUrl)
         if (latitude) localStorage.setItem(`addr_${user.id}_lat`, latitude.toString())
         if (longitude) localStorage.setItem(`addr_${user.id}_lng`, longitude.toString())
-    }, [houseNo, area, address, phone, addressLabel, instructions, mapsUrl, latitude, longitude, user?.id])
+    }, [houseNo, area, address, phone, addressLabel, instructions, mapsUrl, latitude, longitude, user?.id, storageLoaded])
 
     async function handlePayment() {
         if (!user) return toast.error('Please login to place order')
@@ -147,8 +169,9 @@ export default function OrderPage() {
                 Object.entries(profileData).filter(([_, v]) => v != null)
             )
 
-            console.log('Updating user profile with sanitized data...', sanitizedData);
+            console.log('Sending profile update:', sanitizedData);
             await updateUserProfile(user.id, sanitizedData)
+            await refetchProfile() // Crucial: ensure latest data is in state
 
             let finalOrderId = '';
             if (orderType === 'subscription') {

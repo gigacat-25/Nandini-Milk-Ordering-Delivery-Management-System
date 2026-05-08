@@ -158,11 +158,11 @@ export function useUserProfile(userId) {
     return useApiQuery(`/users/${userId}`, [userId], null, { skip: !userId })
 }
 
-export async function updateUserProfile(userId, profileData) {
+export async function updateUserProfile(userId, profileData, clerkToken = null) {
     return apiFetch(`/users/${userId}`, {
         method: 'PUT',
         body: JSON.stringify(profileData)
-    })
+    }, clerkToken)
 }
 
 // --- Wallet ---
@@ -279,7 +279,7 @@ export async function deleteCustomerAccount(customerId) {
     })
 }
 
-export async function upsertUser(clerkUser) {
+export async function upsertUser(clerkUser, clerkToken = null) {
     if (!clerkUser) return null
 
     const email = clerkUser.primaryEmailAddress?.emailAddress || null
@@ -290,7 +290,7 @@ export async function upsertUser(clerkUser) {
     return apiFetch('/users/upsert', {
         method: 'POST',
         body: JSON.stringify({ id: clerkUser.id, email, phone, full_name: fullName })
-    })
+    }, clerkToken)
 }
 
 export async function renewAppAccess(userId) {
