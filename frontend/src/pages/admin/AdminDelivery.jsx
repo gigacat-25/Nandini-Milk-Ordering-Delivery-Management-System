@@ -170,17 +170,6 @@ export default function AdminDelivery() {
         getOlaMapsToken().then(setOlaToken).catch(console.error)
     }, [])
 
-    // Poll for updates every 10 seconds to keep the admin view in sync with drivers
-    useEffect(() => {
-        const interval = setInterval(() => {
-           refetchOrders()
-           refetchComp()
-           refetchPhotos()
-           refetchSkips()
-           refetchSession() // Also refetch session to get live location
-        }, 10000)
-        return () => clearInterval(interval)
-    }, [refetchOrders, refetchComp, refetchPhotos, refetchSkips, refetchSession])
 
     // Ola Maps Logic
     useEffect(() => {
