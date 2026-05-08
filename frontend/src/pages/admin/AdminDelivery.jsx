@@ -243,7 +243,7 @@ export default function AdminDelivery() {
 
     // Update Markers & Bounds — depends on mapLoaded to re-run after map initialises
     useEffect(() => {
-        if (!mapRef.current || !olaToken) return
+        if (!mapRef.current || !olaToken || !mapLoaded) return
         const { map, sdk: olaMaps } = mapRef.current
 
         // 1. Handle Customer Markers
@@ -351,8 +351,22 @@ export default function AdminDelivery() {
             }
         })
 
+        // 3. Fit Bounds — only if we actually have valid coordinate points
         if (hasPoints) {
-            map.fitBounds(bounds, { padding: 50, maxZoom: 15 })
+            try {
+                // Validate that bounds is properly initialized before calling fitBounds
+                const sw = bounds.getSouthWest()
+                const ne = bounds.getNorthEast()
+                if (sw && ne && sw.lng !== undefined && ne.lng !== undefined) {
+                    map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 800 })
+                }
+            } catch (e) {
+                console.warn('fitBounds failed, falling back to default center:', e)
+                map.flyTo({ center: [77.5946, 12.9716], zoom: 12 })
+            }
+        } else {
+            // No coordinates yet — stay at default center with a helpful message
+            console.log('AdminDelivery: No customer coordinates found, staying at default center')
         }
 
     }, [deliveries, customers, deliverySession, mapLoaded])
