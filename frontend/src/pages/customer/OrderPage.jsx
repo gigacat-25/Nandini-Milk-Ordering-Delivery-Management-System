@@ -15,14 +15,21 @@ export default function OrderPage() {
     const navigate = useNavigate()
     const { user } = useUser()
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
-    const [houseNo, setHouseNo] = useState('')
-    const [area, setArea] = useState('')
-    const [phone, setPhone] = useState('')
-    const [addressLabel, setAddressLabel] = useState('Home')
-    const [instructions, setInstructions] = useState('')
-    const [latitude, setLatitude] = useState(null)
-    const [longitude, setLongitude] = useState(null)
-    const [mapsUrl, setMapsUrl] = useState('')
+    const [houseNo, setHouseNo] = useState(() => localStorage.getItem(`addr_${user?.id}_houseNo`) || '')
+    const [area, setArea] = useState(() => localStorage.getItem(`addr_${user?.id}_area`) || '')
+    const [address, setAddress] = useState(() => localStorage.getItem(`addr_${user?.id}_address`) || '')
+    const [phone, setPhone] = useState(() => localStorage.getItem(`addr_${user?.id}_phone`) || '')
+    const [addressLabel, setAddressLabel] = useState(() => localStorage.getItem(`addr_${user?.id}_label`) || 'Home')
+    const [instructions, setInstructions] = useState(() => localStorage.getItem(`addr_${user?.id}_instructions`) || '')
+    const [latitude, setLatitude] = useState(() => {
+        const val = localStorage.getItem(`addr_${user?.id}_lat`)
+        return val ? parseFloat(val) : null
+    })
+    const [longitude, setLongitude] = useState(() => {
+        const val = localStorage.getItem(`addr_${user?.id}_lng`)
+        return val ? parseFloat(val) : null
+    })
+    const [mapsUrl, setMapsUrl] = useState(() => localStorage.getItem(`addr_${user?.id}_mapsUrl`) || '')
     
     const location = useLocation()
     const queryParams = new URLSearchParams(location.search)
@@ -88,16 +95,32 @@ export default function OrderPage() {
 
     useEffect(() => {
         if (profile) {
-            setHouseNo(profile.house_no || '')
-            setArea(profile.area || '')
-            setPhone(profile.phone || user?.primaryPhoneNumber?.phoneNumber || '')
-            setAddressLabel(profile.address_label || 'Home')
-            setInstructions(profile.delivery_instructions || '')
-            setMapsUrl(profile.google_maps_url || '')
-            setLatitude(profile.latitude || null)
-            setLongitude(profile.longitude || null)
+            // Only overwrite if local state is empty to prevent snapping back while editing
+            if (!houseNo) setHouseNo(profile.house_no || '')
+            if (!area) setArea(profile.area || '')
+            if (!address) setAddress(profile.address || '')
+            if (!phone) setPhone(profile.phone || user?.primaryPhoneNumber?.phoneNumber || '')
+            if (!addressLabel || addressLabel === 'Home') setAddressLabel(profile.address_label || 'Home')
+            if (!instructions) setInstructions(profile.delivery_instructions || '')
+            if (!mapsUrl) setMapsUrl(profile.google_maps_url || '')
+            if (!latitude) setLatitude(profile.latitude || null)
+            if (!longitude) setLongitude(profile.longitude || null)
         }
     }, [profile])
+
+    // Save to localStorage whenever values change
+    useEffect(() => {
+        if (!user?.id) return
+        localStorage.setItem(`addr_${user.id}_houseNo`, houseNo)
+        localStorage.setItem(`addr_${user.id}_area`, area)
+        localStorage.setItem(`addr_${user.id}_address`, address)
+        localStorage.setItem(`addr_${user.id}_phone`, phone)
+        localStorage.setItem(`addr_${user.id}_label`, addressLabel)
+        localStorage.setItem(`addr_${user.id}_instructions`, instructions)
+        localStorage.setItem(`addr_${user.id}_mapsUrl`, mapsUrl)
+        if (latitude) localStorage.setItem(`addr_${user.id}_lat`, latitude.toString())
+        if (longitude) localStorage.setItem(`addr_${user.id}_lng`, longitude.toString())
+    }, [houseNo, area, address, phone, addressLabel, instructions, mapsUrl, latitude, longitude, user?.id])
 
     async function handlePayment() {
         if (!user) return toast.error('Please login to place order')
@@ -392,6 +415,7 @@ export default function OrderPage() {
                                                             setMapsUrl(`https://maps.olamaps.io/?lat=${pos.lat}&lng=${pos.lng}&z=17`);
                                                         }}
                                                         onAddressChange={(addr, isAuto) => {
+                                                            setAddress(addr);
                                                             if (isAuto || !area) {
                                                                 setArea(addr);
                                                             }
