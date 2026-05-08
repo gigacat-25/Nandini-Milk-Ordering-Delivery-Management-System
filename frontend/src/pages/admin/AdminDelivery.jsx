@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Download, CheckCircle, MapPin, Phone, MessageSquare, ExternalLink, Loader2, PlayCircle, StopCircle, RotateCcw, XCircle, Undo2, Camera, X, List, Coins, Clock, Truck } from 'lucide-react'
-import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos, API_BASE } from '../../lib/useData'
+import { useSubscriptions, useCustomers, useSubscriptionPauses, useOrdersByDate, useDeliveries, markOrderDelivered, markSubscriptionDelivered, unmarkOrderDelivered, unmarkSubscriptionDelivered, useDeliverySession, startDeliverySession, endDeliverySession, usePartialSkips, skipDeliveryItem, unskipDeliveryItem, updateOrderStatus, useDeliveryPhotos, API_BASE, getOlaMapsToken } from '../../lib/useData'
 import Navbar from '../../components/Navbar'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../../lib/utils'
@@ -8,10 +8,6 @@ import { useUser } from '@clerk/clerk-react'
 import { OlaMaps } from 'olamaps-web-sdk'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-
-
-
-const OLA_API_KEY = import.meta.env.VITE_OLA_MAPS_API_KEY
 
 export default function AdminDelivery() {
     const { user } = useUser()
@@ -24,6 +20,7 @@ export default function AdminDelivery() {
     const { data: completedDeliveries, loading: compLoading, refetch: refetchComp } = useDeliveries(date)
     const { data: deliverySession, refetch: refetchSession } = useDeliverySession(date, activeSlot)
     const { data: partialSkips, loading: skipsLoading, refetch: refetchSkips } = usePartialSkips(date)
+    const [olaToken, setOlaToken] = useState(null)
 
     const [updatingId, setUpdatingId] = useState(null)
     const [sessionLoading, setSessionLoading] = useState(false)
@@ -168,6 +165,11 @@ export default function AdminDelivery() {
         return `${API_BASE}${url}`
     }
 
+    // Fetch Ola Token on mount
+    useEffect(() => {
+        getOlaMapsToken().then(setOlaToken).catch(console.error)
+    }, [])
+
     // Poll for updates every 10 seconds to keep the admin view in sync with drivers
     useEffect(() => {
         const interval = setInterval(() => {
@@ -182,40 +184,78 @@ export default function AdminDelivery() {
 
     // Ola Maps Logic
     useEffect(() => {
-        if (!showMap || !mapContainerRef.current || mapRef.current) return
+        let isMounted = true
+        if (!showMap || !mapContainerRef.current || !olaToken) return
 
-        const olaMaps = new OlaMaps({
-            apiKey: OLA_API_KEY,
-        })
+        const initMap = async () => {
+            try {
+                const olaMaps = new OlaMaps({
+                    accessToken: olaToken,
+                })
 
-        const map = olaMaps.init({
-            style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
-            container: mapContainerRef.current,
-            center: [77.5946, 12.9716],
-            zoom: 12,
-        })
+                let mapInstance = olaMaps.init({
+                    style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
+                    container: mapContainerRef.current,
+                    center: [77.5946, 12.9716],
+                    zoom: 12,
+                })
 
-        map.on('load', () => {
-            mapRef.current = map
-            setMapLoaded(true)
-        })
+                // SDK might return a Promise
+                if (mapInstance instanceof Promise) {
+                    mapInstance = await mapInstance
+                }
+
+                // Wait for map to be ready and double check properties
+                if (!mapInstance) {
+                    console.error('Ola Maps failed to return an instance')
+                    return
+                }
+
+                // Some versions return a wrapper object
+                const actualMap = mapInstance.map || mapInstance
+
+                if (!isMounted) {
+                    if (actualMap.remove) actualMap.remove()
+                    return
+                }
+
+                if (typeof actualMap.on !== 'function') {
+                    console.error('Ola Maps instance does not support .on()')
+                    return
+                }
+
+                actualMap.on('load', () => {
+                    if (!isMounted) return
+                    mapRef.current = { map: actualMap, sdk: olaMaps }
+                    setMapLoaded(true)
+                })
+            } catch (err) {
+                console.error('Ola Maps initialization error:', err)
+            }
+        }
+
+        initMap()
 
         return () => {
-            if (mapRef.current) {
-                mapRef.current.remove()
+            isMounted = false
+            if (mapRef.current?.map) {
+                try {
+                    mapRef.current.map.remove()
+                } catch (e) {
+                    console.warn('Error removing map:', e)
+                }
                 mapRef.current = null
                 markersRef.current = {}
                 driverMarkerRef.current = null
             }
             setMapLoaded(false)
         }
-    }, [showMap])
+    }, [showMap, olaToken])
 
     // Update Markers & Bounds — depends on mapLoaded to re-run after map initialises
     useEffect(() => {
-        if (!mapRef.current) return
-        const map = mapRef.current
-        const olaMaps = new OlaMaps({ apiKey: OLA_API_KEY })
+        if (!mapRef.current || !olaToken) return
+        const { map, sdk: olaMaps } = mapRef.current
 
         // 1. Handle Customer Markers
         const activeDeliveries = deliveries.filter(d => d.status !== 'cancelled')

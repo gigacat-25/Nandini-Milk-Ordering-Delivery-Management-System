@@ -332,3 +332,9 @@ export async function toggleSubscriptionStatus(subscriptionId, customerId, newSt
         body: JSON.stringify({ status: newStatus })
     })
 }
+
+// --- Ola Maps ---
+export async function getOlaMapsToken() {
+    const data = await apiFetch('/ola/token')
+    return data.access_token
+}

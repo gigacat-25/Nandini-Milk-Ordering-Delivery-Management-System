@@ -3,7 +3,7 @@ import { OlaMaps } from 'olamaps-web-sdk'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useUser } from '@clerk/clerk-react'
-import { useUserProfile, useDeliverySession } from '../../lib/useData'
+import { useUserProfile, useDeliverySession, getOlaMapsToken } from '../../lib/useData'
 import { Navigation, Home, Truck, MapPin, RefreshCw, ChevronLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -13,6 +13,8 @@ export default function LiveTracking() {
     const mapContainerRef = useRef(null)
     const mapRef = useRef(null)
     const markersRef = useRef({})
+    const [olaToken, setOlaToken] = useState(null)
+    const [mapLoaded, setMapLoaded] = useState(false)
     
     // Determine slot based on time
     const [slot] = useState(() => {
@@ -22,6 +24,11 @@ export default function LiveTracking() {
     const [date] = useState(() => new Date().toISOString().split('T')[0])
     
     const { data: session, refetch: refetchSession } = useDeliverySession(date, slot)
+
+    // Fetch Ola Token on mount
+    useEffect(() => {
+        getOlaMapsToken().then(setOlaToken).catch(console.error)
+    }, [])
 
     // Poll for session updates every 10 seconds
     useEffect(() => {
@@ -35,32 +42,76 @@ export default function LiveTracking() {
 
     // Initialize Map
     useEffect(() => {
-        if (!mapContainerRef.current) return
+        let isMounted = true
+        if (!mapContainerRef.current || !olaToken) return
 
-        const olaMaps = new OlaMaps({
-            apiKey: import.meta.env.VITE_OLA_MAPS_API_KEY
-        })
+        const initMap = async () => {
+            try {
+                const olaMaps = new OlaMaps({
+                    accessToken: olaToken
+                })
 
-        const myMap = olaMaps.init({
-            style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
-            container: mapContainerRef.current,
-            center: userPos ? [userPos.lng, userPos.lat] : [77.5946, 12.9716],
-            zoom: 15
-        })
+                let mapInstance = olaMaps.init({
+                    style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
+                    container: mapContainerRef.current,
+                    center: userPos ? [userPos.lng, userPos.lat] : [77.5946, 12.9716],
+                    zoom: 15
+                })
 
-        mapRef.current = myMap
-        return () => {
-            if (mapRef.current) {
-                mapRef.current.remove()
-                mapRef.current = null
+                // SDK might return a Promise
+                if (mapInstance instanceof Promise) {
+                    mapInstance = await mapInstance
+                }
+
+                if (!mapInstance) {
+                    console.error('Ola Maps failed to return an instance')
+                    return
+                }
+
+                const actualMap = mapInstance.map || mapInstance
+
+                if (!isMounted) {
+                    if (actualMap.remove) actualMap.remove()
+                    return
+                }
+
+                // Unlike the other pages, we don't strictly need mapLoaded state here 
+                // because the markers useEffect depends on mapRef.current.
+                // But it's safer to wait for 'load' anyway if we want to be consistent.
+                // However, the current code just sets it and relies on the next effect.
+                // Let's at least ensure actualMap is what we put in the ref.
+                
+                mapRef.current = { map: actualMap, sdk: olaMaps }
+                
+                actualMap.on('load', () => {
+                    if (isMounted) setMapLoaded(true)
+                })
+            } catch (err) {
+                console.error('Ola Maps initialization error:', err)
             }
         }
-    }, [])
+
+        initMap()
+        
+        return () => {
+            isMounted = false
+            setMapLoaded(false)
+            if (mapRef.current?.map) {
+                try {
+                    mapRef.current.map.remove()
+                } catch (e) {
+                    console.warn('Error removing map:', e)
+                }
+                mapRef.current = null
+                markersRef.current = {}
+            }
+        }
+    }, [olaToken])
 
     // Manage Markers and Bounds
     useEffect(() => {
-        const map = mapRef.current
-        if (!map) return
+        if (!mapRef.current || !olaToken) return
+        const { map, sdk: olaMaps } = mapRef.current
 
         // 1. Home Marker
         if (userPos) {
@@ -71,7 +122,7 @@ export default function LiveTracking() {
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     </div>
                 `
-                markersRef.current.home = new maplibregl.Marker({ element: el })
+                markersRef.current.home = olaMaps.addMarker({ element: el })
                     .setLngLat([userPos.lng, userPos.lat])
                     .addTo(map)
             } else {
@@ -88,7 +139,7 @@ export default function LiveTracking() {
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-5l-4-4h-3v10h3Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
                     </div>
                 `
-                markersRef.current.truck = new maplibregl.Marker({ element: el })
+                markersRef.current.truck = olaMaps.addMarker({ element: el })
                     .setLngLat([truckPos.lng, truckPos.lat])
                     .addTo(map)
             } else {
@@ -108,7 +159,7 @@ export default function LiveTracking() {
         } else if (userPos) {
             map.easeTo({ center: [userPos.lng, userPos.lat], zoom: 15, duration: 1000 })
         }
-    }, [userPos, truckPos, isActive])
+    }, [userPos, truckPos, isActive, mapLoaded])
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">

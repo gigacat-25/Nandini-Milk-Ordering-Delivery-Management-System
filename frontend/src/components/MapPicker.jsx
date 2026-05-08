@@ -1,110 +1,154 @@
 import { useState, useEffect, useRef } from 'react'
 import { OlaMaps } from 'olamaps-web-sdk'
 import { Navigation, Loader2, MapPin } from 'lucide-react'
+import { getOlaMapsToken } from '../lib/useData'
 
 // Import Ola Maps CSS or fallback to MapLibre CSS which it's based on
 import 'maplibre-gl/dist/maplibre-gl.css'
-
-const OLA_API_KEY = import.meta.env.VITE_OLA_MAPS_API_KEY
 
 export default function MapPicker({ initialPosition, onLocationChange, onAddressChange }) {
     const mapContainerRef = useRef(null)
     const mapRef = useRef(null)
     const markerRef = useRef(null)
-    const circleRef = useRef(null)
     
     const [position, setPosition] = useState(initialPosition || { lat: 12.9716, lng: 77.5946 })
     const [detecting, setDetecting] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
+    const [olaToken, setOlaToken] = useState(null)
+
+    // Fetch Ola Token on mount
+    useEffect(() => {
+        let isMounted = true
+        getOlaMapsToken()
+            .then(token => {
+                if (isMounted) setOlaToken(token)
+            })
+            .catch(err => console.error("Failed to fetch Ola Token:", err))
+        return () => { isMounted = false }
+    }, [])
 
     // Initialize Ola Maps
     useEffect(() => {
-        if (!mapContainerRef.current || mapRef.current) return
+        if (!mapContainerRef.current || mapRef.current || !olaToken) return
 
-        const olaMaps = new OlaMaps({
-            apiKey: OLA_API_KEY,
-        })
+        const initMap = async () => {
+            try {
+                const olaMapsInstance = new OlaMaps({
+                    accessToken: olaToken,
+                })
 
-        let map
-        try {
-            map = olaMaps.init({
-                style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
-                container: mapContainerRef.current,
-                center: [position.lng, position.lat],
-                zoom: 15,
-            })
-        } catch (err) {
-            // maplibre throws if the container is already initialised (React strict-mode
-            // double-invokes effects). Bail out silently — the second mount will succeed.
-            console.warn('MapPicker: map init skipped (container already initialised)', err)
-            return
+                console.log('MapPicker: Initializing map...')
+                let map = olaMapsInstance.init({
+                    style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
+                    container: mapContainerRef.current,
+                    center: [position.lng, position.lat],
+                    zoom: 15,
+                })
+
+                // Handle potential Promise return (some SDK versions)
+                if (map instanceof Promise) {
+                    map = await map
+                }
+
+                // Reliability check for the map instance
+                if (!map || typeof map.on !== 'function') {
+                    console.warn('MapPicker: map.on is missing, checking for nested instance', map)
+                    // Some SDK versions might return { map: ... } or the instance might be on the SDK object
+                    const fallbackMap = map?.map || olaMapsInstance.map || olaMapsInstance.getMap?.()
+                    if (fallbackMap && typeof fallbackMap.on === 'function') {
+                        map = fallbackMap
+                    } else {
+                        throw new Error('Could not find valid map instance with .on() method')
+                    }
+                }
+
+                mapRef.current = map
+
+                const handleLoad = () => {
+                    console.log('MapPicker: Map loaded successfully')
+                    setIsLoaded(true)
+
+                    // Create custom marker element
+                    const el = document.createElement('div');
+                    el.innerHTML = `
+                        <div style="background: white; border-radius: 50%; padding: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 2px solid #2563eb; display: flex; align-items: center; justify-content: center; transform: translateY(-50%); cursor: grab;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                        </div>
+                    `;
+
+                    // Add initial marker using the SDK instance
+                    try {
+                        const marker = olaMapsInstance.addMarker({
+                            element: el,
+                            anchor: 'center',
+                            draggable: true,
+                        })
+                        .setLngLat([position.lng, position.lat])
+                        .addTo(map)
+
+                        marker.on('dragend', () => {
+                            const lngLat = marker.getLngLat()
+                            const newPos = { lat: lngLat.lat, lng: lngLat.lng }
+                            setPosition(newPos)
+                        })
+
+                        markerRef.current = marker
+                    } catch (markerErr) {
+                        console.error('MapPicker: Failed to add marker', markerErr)
+                    }
+                }
+
+                if (map.loaded()) {
+                    handleLoad()
+                } else {
+                    map.on('load', handleLoad)
+                }
+
+                // Click to move marker
+                map.on('click', (e) => {
+                    const { lng, lat } = e.lngLat
+                    const newPos = { lat, lng }
+                    setPosition(newPos)
+                    if (markerRef.current) {
+                        markerRef.current.setLngLat([lng, lat])
+                    }
+                })
+
+            } catch (err) {
+                console.error('MapPicker: Initialization error:', err)
+            }
         }
 
-        // Set the ref IMMEDIATELY so the cleanup below can always call .remove(),
-        // even if the 'load' event hasn't fired yet. This prevents the strict-mode
-        // double-invoke from trying to init on an already-owned container.
-        mapRef.current = map
-
-        map.on('load', () => {
-            setIsLoaded(true)
-
-            // Create custom marker element
-            const el = document.createElement('div');
-            el.innerHTML = `
-                <div style="background: white; border-radius: 50%; padding: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 2px solid #2563eb; display: flex; align-items: center; justify-content: center; transform: translateY(-50%); cursor: grab;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                        <circle cx="12" cy="10" r="3"></circle>
-                    </svg>
-                </div>
-            `;
-
-            // Add initial marker
-            const marker = olaMaps.addMarker({
-                element: el,
-                anchor: 'center',
-                draggable: true,
-            })
-            .setLngLat([position.lng, position.lat])
-            .addTo(map)
-
-            marker.on('dragend', () => {
-                const lngLat = marker.getLngLat()
-                const newPos = { lat: lngLat.lat, lng: lngLat.lng }
-                setPosition(newPos)
-            })
-
-            markerRef.current = marker
-        })
-
-        // Click to move marker
-        map.on('click', (e) => {
-            const { lng, lat } = e.lngLat
-            const newPos = { lat, lng }
-            setPosition(newPos)
-            if (markerRef.current) {
-                markerRef.current.setLngLat([lng, lat])
-            }
-        })
+        initMap()
 
         return () => {
-            // Always remove — ref is set synchronously above
             if (mapRef.current) {
-                mapRef.current.remove()
+                try {
+                    mapRef.current.remove()
+                } catch (e) {
+                    console.warn('MapPicker: Error during map removal', e)
+                }
                 mapRef.current = null
             }
             markerRef.current = null
             setIsLoaded(false)
         }
-    }, [])
+    }, [olaToken]) // Re-run when token is acquired
 
     // Update parent and reverse geocode when position changes
     useEffect(() => {
-        if (!position) return
+        if (!position || !olaToken) return
         onLocationChange(position)
 
-        // Reverse Geocoding using Ola Maps API
-        fetch(`https://api.olamaps.io/places/v1/reverse-geocode?latlng=${position.lat},${position.lng}&api_key=${OLA_API_KEY}`)
+        // Reverse Geocoding using Ola Maps API with JWT/Token
+        fetch(`https://api.olamaps.io/places/v1/reverse-geocode?latlng=${position.lat},${position.lng}`, {
+            headers: {
+                'Authorization': `Bearer ${olaToken}`
+            }
+        })
             .then(res => res.json())
             .then(data => {
                 if (data.results && data.results[0]) {
@@ -112,7 +156,7 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
                 }
             })
             .catch(err => console.error("Ola Geocoding error:", err))
-    }, [position])
+    }, [position, olaToken])
 
     // Update marker when position changes externally or via map click
     useEffect(() => {

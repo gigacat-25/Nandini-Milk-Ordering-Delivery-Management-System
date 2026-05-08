@@ -7,6 +7,9 @@ type Bindings = {
   GMAIL_CLIENT_ID: string
   GMAIL_CLIENT_SECRET: string
   GMAIL_REFRESH_TOKEN: string
+  OLA_CLIENT_ID: string
+  OLA_CLIENT_SECRET: string
+  OLA_API_KEY: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -365,6 +368,56 @@ app.post('/deliveries/email-qr', async (c) => {
     console.error('Email failed:', e.message);
     return c.json({ error: e.message }, 500);
   }
+})
+
+/**
+ * --- OLA MAPS SERVICE ---
+ */
+let olaTokenCache: { token: string, expiresAt: number } | null = null;
+
+async function getOlaAccessToken(env: Bindings) {
+  // Check cache (with 1 min buffer)
+  if (olaTokenCache && Date.now() < olaTokenCache.expiresAt - 60000) {
+    return olaTokenCache.token;
+  }
+
+  const params = new URLSearchParams();
+  params.append('grant_type', 'client_credentials');
+  params.append('client_id', env.OLA_CLIENT_ID);
+  params.append('client_secret', env.OLA_CLIENT_SECRET);
+
+  const res = await fetch('https://api.olamaps.io/auth/v1/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString()
+  });
+
+  const data: any = await res.json();
+  if (!res.ok) throw new Error(data.error_description || 'Failed to get Ola access token');
+  
+  // Cache the token. Usually expires_in is in seconds.
+  const expiresIn = data.expires_in || 3600; // Default to 1 hour if not provided
+  olaTokenCache = {
+    token: data.access_token,
+    expiresAt: Date.now() + (expiresIn * 1000)
+  };
+
+  return data.access_token;
+}
+
+app.get('/ola/token', async (c) => {
+  try {
+    const token = await getOlaAccessToken(c.env);
+    return c.json({ access_token: token });
+  } catch (e: any) {
+    console.error('Ola Token failed:', e.message);
+    return c.json({ error: e.message }, 500);
+  }
+})
+
+app.get('/ola/api-key', async (c) => {
+  // Providing a way to get the API key if needed, though usually it's in the frontend env
+  return c.json({ api_key: c.env.OLA_API_KEY });
 })
 
 /**
