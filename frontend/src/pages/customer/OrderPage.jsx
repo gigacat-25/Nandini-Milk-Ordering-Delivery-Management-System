@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from '../../lib/utils'
 import { createOrder, createSubscription, useUserProfile, addWalletFunds, updateUserProfile } from '../../lib/useData'
 import { useUser } from '@clerk/clerk-react'
 import Navbar from '../../components/Navbar'
+import MapPicker from '../../components/MapPicker'
 import toast from 'react-hot-toast'
 
 export default function OrderPage() {
@@ -364,17 +365,28 @@ export default function OrderPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="space-y-2">
+                                                <div className="space-y-4">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
-                                                        <Navigation size={12} /> Google Maps Link (Optional)
+                                                        <Navigation size={12} /> Pin Location on Map
                                                     </label>
-                                                    <input 
-                                                        className="input !py-4 font-bold text-sm shadow-sm" 
-                                                        type="url" 
-                                                        placeholder="Paste google maps link here"
-                                                        value={mapsUrl} 
-                                                        onChange={e => setMapsUrl(e.target.value)} 
+                                                    
+                                                    <MapPicker 
+                                                        initialPosition={latitude && longitude ? { lat: latitude, lng: longitude } : null}
+                                                        onLocationChange={(pos) => {
+                                                            setLatitude(pos.lat);
+                                                            setLongitude(pos.lng);
+                                                            setMapsUrl(`https://www.google.com/maps?q=${pos.lat},${pos.lng}`);
+                                                        }}
+                                                        onAddressChange={(addr, isAuto) => {
+                                                            if (isAuto || !area) {
+                                                                setArea(addr);
+                                                            }
+                                                        }}
                                                     />
+                                                    
+                                                    <p className="text-[10px] text-slate-400 font-medium px-2 leading-tight">
+                                                        Tip: Accurate pinning helps our delivery team reach you faster.
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
