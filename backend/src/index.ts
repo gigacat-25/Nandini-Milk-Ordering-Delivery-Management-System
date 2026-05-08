@@ -701,15 +701,15 @@ app.put('/users/:id', async (c) => {
                 address_label = ?
             WHERE id = ?
         `).bind(
-            body.address, 
-            body.delivery_instructions, 
-            body.google_maps_url, 
-            body.phone, 
-            body.latitude,
-            body.longitude,
-            body.house_no,
-            body.area,
-            body.address_label,
+            body.address ?? null, 
+            body.delivery_instructions ?? null, 
+            body.google_maps_url ?? null, 
+            body.phone ?? null, 
+            body.latitude ?? null, 
+            body.longitude ?? null, 
+            body.house_no ?? null, 
+            body.area ?? null, 
+            body.address_label ?? 'Home',
             id
         ).run();
         return c.json({ success: true });

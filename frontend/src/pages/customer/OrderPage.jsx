@@ -108,13 +108,14 @@ export default function OrderPage() {
             
             console.log('Updating user profile...');
             const profileData = {
+                address: address || '',
                 house_no: houseNo || '',
                 area: area || '',
                 address_label: addressLabel || 'Home',
                 delivery_instructions: instructions || '',
                 google_maps_url: mapsUrl || '',
-                latitude: latitude || 0,
-                longitude: longitude || 0,
+                latitude: latitude || null,
+                longitude: longitude || null,
                 phone: phone || profile?.phone || user?.primaryPhoneNumber?.phoneNumber || ''
             }
 
