@@ -417,6 +417,9 @@ export default function AdminDelivery() {
             const cust = customers.find(c => c.id === d.customerId)
             if (!cust?.latitude || !cust?.longitude) return
 
+            const lat = Number(cust.latitude)
+            const lng = Number(cust.longitude)
+
             const isDelivered = d.status === 'delivered'
             const color = isDelivered ? '#059669' : '#f59e0b'
             // Show optimized order number if route is computed
@@ -442,7 +445,7 @@ export default function AdminDelivery() {
 
             if (!markersRef.current[d.id]) {
                 const marker = olaMaps.addMarker({ element: el })
-                    .setLngLat([cust.longitude, cust.latitude])
+                    .setLngLat([lng, lat])
                     .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`
                         <div style="padding: 0.25rem; font-family: sans-serif;">
                             <div style="font-weight: 800; color: #1e293b;">${d.customer}</div>
@@ -456,12 +459,15 @@ export default function AdminDelivery() {
                 markersRef.current[d.id] = marker
             } else {
                 // Update existing marker position and icon if needed
-                markersRef.current[d.id].setLngLat([cust.longitude, cust.latitude])
+                markersRef.current[d.id].setLngLat([lng, lat])
             }
         })
 
         // 2. Handle Driver Marker
         if (deliverySession?.current_lat && deliverySession?.current_lng) {
+            const lat = Number(deliverySession.current_lat)
+            const lng = Number(deliverySession.current_lng)
+
             if (!driverMarkerRef.current) {
                 const el = document.createElement('div')
                 el.style.background = '#2563eb'
@@ -477,7 +483,7 @@ export default function AdminDelivery() {
                 el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-5l-4-4h-3v9Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>'
 
                 const marker = olaMaps.addMarker({ element: el })
-                    .setLngLat([deliverySession.current_lng, deliverySession.current_lat])
+                    .setLngLat([lng, lat])
                     .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`
                         <div style="padding: 0.25rem; font-family: sans-serif;">
                             <div style="font-weight: 800; color: #1e293b;">🚚 Driver Live</div>
@@ -487,7 +493,7 @@ export default function AdminDelivery() {
                     .addTo(map)
                 driverMarkerRef.current = marker
             } else {
-                driverMarkerRef.current.setLngLat([deliverySession.current_lng, deliverySession.current_lat])
+                driverMarkerRef.current.setLngLat([lng, lat])
             }
         }
 
@@ -496,14 +502,14 @@ export default function AdminDelivery() {
         let hasPoints = false
 
         if (deliverySession?.current_lat && deliverySession?.current_lng) {
-            bounds.extend([deliverySession.current_lng, deliverySession.current_lat])
+            bounds.extend([Number(deliverySession.current_lng), Number(deliverySession.current_lat)])
             hasPoints = true
         }
 
         activeDeliveries.forEach(d => {
             const cust = customers.find(c => c.id === d.customerId)
             if (cust?.latitude && cust?.longitude) {
-                bounds.extend([cust.longitude, cust.latitude])
+                bounds.extend([Number(cust.longitude), Number(cust.latitude)])
                 hasPoints = true
             }
         })
