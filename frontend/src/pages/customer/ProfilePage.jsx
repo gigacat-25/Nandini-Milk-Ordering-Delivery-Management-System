@@ -63,7 +63,21 @@ export default function ProfilePage() {
 
         setSaving(true)
         try {
-            await updateUserProfile(user.id, profile)
+            // Update map URL if we have coordinates
+            const mapUrl = profile.latitude && profile.longitude 
+                ? `https://maps.olamaps.io/z/17/${profile.latitude},${profile.longitude}`
+                : profile.google_maps_url;
+
+            // Sanitize profile data to remove nulls/undefined/empty strings that backend might reject
+            // Only filter out null/undefined, keep empty strings so we can clear fields if needed
+            const sanitizedProfile = Object.fromEntries(
+                Object.entries({
+                    ...profile,
+                    google_maps_url: mapUrl
+                }).filter(([_, v]) => v !== undefined)
+            );
+
+            await updateUserProfile(user.id, sanitizedProfile)
             toast.success('Delivery details saved successfully!')
             refetchProfile()
         } catch (err) {
@@ -361,6 +375,7 @@ export default function ProfilePage() {
                                         placeholder="+91..."
                                         value={profile.phone}
                                         onChange={e => setProfile({ ...profile, phone: e.target.value })}
+                                        required
                                     />
                                 </div>
                             </div>

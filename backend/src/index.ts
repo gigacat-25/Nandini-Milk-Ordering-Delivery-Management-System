@@ -106,9 +106,9 @@ app.post('/users/upsert', async (c) => {
       INSERT INTO users (id, email, phone, full_name, role, latitude, longitude, house_no, area, address_label)
       VALUES (?, ?, ?, ?, 'customer', ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        email = excluded.email,
-        phone = excluded.phone,
-        full_name = excluded.full_name,
+        email = COALESCE(excluded.email, users.email),
+        phone = COALESCE(excluded.phone, users.phone),
+        full_name = COALESCE(excluded.full_name, users.full_name),
         latitude = COALESCE(excluded.latitude, users.latitude),
         longitude = COALESCE(excluded.longitude, users.longitude),
         house_no = COALESCE(excluded.house_no, users.house_no),

@@ -107,16 +107,24 @@ export default function OrderPage() {
             await new Promise((r) => setTimeout(r, 1800))
             
             console.log('Updating user profile...');
-            await updateUserProfile(user.id, {
-                house_no: houseNo,
-                area: area,
-                address_label: addressLabel,
-                delivery_instructions: instructions,
-                google_maps_url: mapsUrl,
-                latitude: latitude,
-                longitude: longitude,
+            const profileData = {
+                house_no: houseNo || '',
+                area: area || '',
+                address_label: addressLabel || 'Home',
+                delivery_instructions: instructions || '',
+                google_maps_url: mapsUrl || '',
+                latitude: latitude || 0,
+                longitude: longitude || 0,
                 phone: phone || profile?.phone || user?.primaryPhoneNumber?.phoneNumber || ''
-            })
+            }
+
+            // Ensure no null/undefined values reach the API
+            const sanitizedData = Object.fromEntries(
+                Object.entries(profileData).filter(([_, v]) => v != null)
+            )
+
+            console.log('Updating user profile with sanitized data...', sanitizedData);
+            await updateUserProfile(user.id, sanitizedData)
 
             let finalOrderId = '';
             if (orderType === 'subscription') {
@@ -379,7 +387,8 @@ export default function OrderPage() {
                                                         onLocationChange={(pos) => {
                                                             setLatitude(pos.lat);
                                                             setLongitude(pos.lng);
-                                                            setMapsUrl(`https://www.google.com/maps?q=${pos.lat},${pos.lng}`);
+                                                            // Use Ola Maps format for the stored URL
+                                                            setMapsUrl(`https://maps.olamaps.io/?lat=${pos.lat}&lng=${pos.lng}&z=17`);
                                                         }}
                                                         onAddressChange={(addr, isAuto) => {
                                                             if (isAuto || !area) {
