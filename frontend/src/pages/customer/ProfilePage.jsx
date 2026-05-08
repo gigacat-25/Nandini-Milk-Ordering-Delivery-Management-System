@@ -43,7 +43,10 @@ export default function ProfilePage() {
                 google_maps_url: userProfile.google_maps_url || '',
                 phone: userProfile.phone || user?.primaryPhoneNumber?.phoneNumber || '',
                 latitude: userProfile.latitude || null,
-                longitude: userProfile.longitude || null
+                longitude: userProfile.longitude || null,
+                house_no: userProfile.house_no || '',
+                area: userProfile.area || '',
+                address_label: userProfile.address_label || 'Home'
             })
         } else if (user) {
             // Pre-fill phone if it's a new user
@@ -296,30 +299,53 @@ export default function ProfilePage() {
                 {/* Settings Form */}
                 <motion.form variants={itemVariants} onSubmit={handleSave} className="card p-6 md:p-10 space-y-6 md:space-y-10 border-slate-100 shadow-xl shadow-slate-200/40">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                        <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Daily Delivery Address</label>
-                            <textarea
-                                className="input !py-4 h-28 md:h-32 resize-none font-bold text-sm"
-                                placeholder="House Number, Building Name, Street..."
-                                value={profile.address}
-                                onChange={e => setProfile({ ...profile, address: e.target.value })}
-                                required
-                            />
+                        <div className="space-y-4">
+                            <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 flex items-start gap-3 mb-6">
+                                <Info size={18} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                                <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
+                                    A detailed address will help our Delivery Partner reach your doorstep easily.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">House / Flat / Block No.</label>
+                                <input
+                                    type="text"
+                                    className="input !py-4 font-bold text-sm"
+                                    placeholder="e.g. Drno: 45-54-A"
+                                    value={profile.house_no}
+                                    onChange={e => setProfile({ ...profile, house_no: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Apartment / Road / Area (Optional)</label>
+                                <input
+                                    type="text"
+                                    className="input !py-4 font-bold text-sm"
+                                    placeholder="e.g. Prestige Heights / Residency Road"
+                                    value={profile.area}
+                                    onChange={e => setProfile({ ...profile, area: e.target.value })}
+                                />
+                            </div>
                         </div>
                         
                         <div className="space-y-6 md:space-y-8">
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pin your exact location</label>
-                                <MapPicker 
-                                    initialPosition={profile.latitude ? { lat: profile.latitude, lng: profile.longitude } : null}
-                                    onLocationChange={(pos) => setProfile(prev => ({ ...prev, latitude: pos.lat, longitude: pos.lng }))}
-                                    onAddressChange={(addr, isAuto) => {
-                                        // Overwrite address if it's empty OR if it was explicitly requested via "Use My Location"
-                                        if (!profile.address || isAuto) {
-                                            setProfile(prev => ({ ...prev, address: addr }))
-                                        }
-                                    }}
-                                />
+                                <div className="rounded-2xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50 min-h-[300px] relative">
+                                    <MapPicker 
+                                        initialPosition={profile.latitude ? { lat: profile.latitude, lng: profile.longitude } : null}
+                                        onLocationChange={(pos) => setProfile(prev => ({ ...prev, latitude: pos.lat, longitude: pos.lng }))}
+                                        onAddressChange={(addr, isAuto) => {
+                                            // Overwrite address if it's empty OR if it was explicitly requested via "Use My Location"
+                                            if (!profile.address || isAuto) {
+                                                setProfile(prev => ({ ...prev, address: addr }))
+                                            }
+                                        }}
+                                    />
+                                </div>
                                 <div className="text-[9px] font-bold text-slate-400 px-1">
                                     Dragging the pin helps our partner find your exact gate.
                                 </div>
@@ -341,14 +367,42 @@ export default function ProfilePage() {
                         </div>
                     </div>
 
-                    <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Special Morning Instructions</label>
-                        <textarea
-                            className="input !py-4 h-24 resize-none font-bold italic text-slate-600 text-sm"
-                            placeholder="e.g. Leave in the yellow bag hanging on the door handle..."
-                            value={profile.delivery_instructions}
-                            onChange={e => setProfile({ ...profile, delivery_instructions: e.target.value })}
-                        />
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Directions to Reach (Optional)</label>
+                            <div className="relative">
+                                <textarea
+                                    className="input !py-4 h-24 resize-none font-bold italic text-slate-600 text-sm"
+                                    placeholder="e.g. Ring the bell on the red gate"
+                                    value={profile.delivery_instructions}
+                                    maxLength={200}
+                                    onChange={e => setProfile({ ...profile, delivery_instructions: e.target.value })}
+                                />
+                                <div className="absolute bottom-3 right-4 text-[9px] font-bold text-slate-300">
+                                    {profile.delivery_instructions?.length || 0}/200
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Save this address as</label>
+                            <div className="flex gap-3">
+                                {['Home', 'Work', 'Other'].map(label => (
+                                    <button
+                                        key={label}
+                                        type="button"
+                                        onClick={() => setProfile({ ...profile, address_label: label })}
+                                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                                            profile.address_label === label 
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200' 
+                                            : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-slate-50">

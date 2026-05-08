@@ -97,21 +97,24 @@ app.put('/products/global/cutoffs', async (c) => {
  */
 app.post('/users/upsert', async (c) => {
   const body = await c.req.json();
-  const { id, email, phone, full_name, latitude, longitude } = body;
+  const { id, email, phone, full_name, latitude, longitude, house_no, area, address_label } = body;
   console.log(`Upserting user: ${id} (${full_name})`);
   
   try {
     // SQLite Upsert syntax
     await c.env.DB.prepare(`
-      INSERT INTO users (id, email, phone, full_name, role, latitude, longitude)
-      VALUES (?, ?, ?, ?, 'customer', ?, ?)
+      INSERT INTO users (id, email, phone, full_name, role, latitude, longitude, house_no, area, address_label)
+      VALUES (?, ?, ?, ?, 'customer', ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         email = excluded.email,
         phone = excluded.phone,
         full_name = excluded.full_name,
         latitude = COALESCE(excluded.latitude, users.latitude),
-        longitude = COALESCE(excluded.longitude, users.longitude)
-    `).bind(id, email, phone, full_name, latitude || null, longitude || null).run();
+        longitude = COALESCE(excluded.longitude, users.longitude),
+        house_no = COALESCE(excluded.house_no, users.house_no),
+        area = COALESCE(excluded.area, users.area),
+        address_label = COALESCE(excluded.address_label, users.address_label)
+    `).bind(id, email, phone, full_name, latitude || null, longitude || null, house_no || null, area || null, address_label || 'Home').run();
 
     const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
     return c.json(user);
@@ -692,7 +695,10 @@ app.put('/users/:id', async (c) => {
                 google_maps_url = ?, 
                 phone = ?,
                 latitude = ?,
-                longitude = ?
+                longitude = ?,
+                house_no = ?,
+                area = ?,
+                address_label = ?
             WHERE id = ?
         `).bind(
             body.address, 
@@ -701,6 +707,9 @@ app.put('/users/:id', async (c) => {
             body.phone, 
             body.latitude,
             body.longitude,
+            body.house_no,
+            body.area,
+            body.address_label,
             id
         ).run();
         return c.json({ success: true });

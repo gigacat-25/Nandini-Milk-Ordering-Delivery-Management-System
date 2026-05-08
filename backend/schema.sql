@@ -27,7 +27,12 @@ CREATE TABLE users (
   wallet_balance REAL DEFAULT 0,
   role TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'admin', 'delivery')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  latitude REAL,
+  longitude REAL,
+  house_no TEXT,
+  area TEXT,
+  address_label TEXT DEFAULT 'Home'
 );
 
 -- 2. Products table
@@ -140,6 +145,8 @@ CREATE TABLE delivery_sessions (
   started_at TEXT DEFAULT CURRENT_TIMESTAMP,
   ended_at TEXT,
   active INTEGER DEFAULT 1,
+  current_lat REAL,
+  current_lng REAL,
   UNIQUE(session_date, slot)
 );
 
