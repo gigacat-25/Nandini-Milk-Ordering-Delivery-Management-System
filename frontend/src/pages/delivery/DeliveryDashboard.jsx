@@ -42,6 +42,7 @@ export default function DeliveryDashboard() {
 
     const [updatingId, setUpdatingId] = useState(null)
     const isSessionActive = !!deliverySession
+    const [isOptimized, setIsOptimized] = useState(false)
 
     // QR Scanning state
     const [scanModal, setScanModal] = useState(null) // { delivery: d }
@@ -105,7 +106,6 @@ export default function DeliveryDashboard() {
                 return acc
             }, {})
 
-            const subItemsStr = Object.values(grouped).map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
             const subAmount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
 
             const hasFunds = (customer?.wallet_balance || 0) >= subAmount
@@ -115,11 +115,14 @@ export default function DeliveryDashboard() {
             return {
                 id: sub.id,
                 type: 'subscription',
+                sourceIds: [{ type: 'subscription', id: sub.id, amount: subAmount }],
                 customerId: sub.customer_id,
                 customer: customer?.full_name || 'Unknown',
                 address: customer?.address || 'Address not provided',
                 phone: customer?.phone || 'N/A',
                 google_maps: customer?.google_maps_url,
+                lat: customer?.latitude ? Number(customer.latitude) : null,
+                lng: customer?.longitude ? Number(customer.longitude) : null,
                 instructions: customer?.delivery_instructions,
                 itemArray: Object.values(grouped),
                 slot: sub.delivery_slot,
@@ -149,17 +152,20 @@ export default function DeliveryDashboard() {
                 return acc
             }, {})
 
-            const itemsStr = Object.values(grouped).map(i => `${i.quantity}x ${i.products?.name}`).join(', ')
             const orderAmount = activeItems.reduce((sum, i) => sum + ((i.price_at_time ?? i.products?.price ?? 0) * i.quantity), 0)
+            const customer = customers.find(c => c.id === order.customer_id)
 
             return {
                 id: order.id,
                 type: 'order',
+                sourceIds: [{ type: 'order', id: order.id, amount: orderAmount }],
                 customerId: order.customer_id,
                 customer: order.customer_name || 'Unknown',
                 address: order.customer_address || 'Address not provided',
                 phone: order.customer_phone || 'N/A',
                 google_maps: order.google_maps_url,
+                lat: customer?.latitude ? Number(customer.latitude) : null,
+                lng: customer?.longitude ? Number(customer.longitude) : null,
                 instructions: order.delivery_instructions,
                 itemArray: Object.values(grouped),
                 slot: order.delivery_slot,
@@ -169,8 +175,74 @@ export default function DeliveryDashboard() {
             }
         })
 
-        return [...activeSubs, ...orderDeliveries].filter(d => d.hasActiveItems)
-    }, [subscriptions, customers, pauses, orders, completedDeliveries, date, partialSkips, activeSlot])
+        const allActive = [...activeSubs, ...orderDeliveries].filter(d => d.hasActiveItems)
+        
+        // Merge by customerId
+        const mergedDeliveries = {}
+        allActive.forEach(d => {
+            if (!mergedDeliveries[d.customerId]) {
+                mergedDeliveries[d.customerId] = { ...d }
+            } else {
+                const existing = mergedDeliveries[d.customerId]
+                existing.type = 'mixed'
+                existing.sourceIds.push(...d.sourceIds)
+                existing.amount += d.amount
+                
+                // Combine item arrays
+                const combinedItemArray = [...existing.itemArray]
+                d.itemArray.forEach(newItem => {
+                    const existingItem = combinedItemArray.find(i => i.product_id === newItem.product_id)
+                    if (existingItem) {
+                        existingItem.quantity += newItem.quantity
+                    } else {
+                        combinedItemArray.push(newItem)
+                    }
+                })
+                existing.itemArray = combinedItemArray
+                
+                // Merge status
+                if (existing.status === 'delivered' && d.status !== 'delivered') {
+                    existing.status = d.status
+                } else if (existing.status === 'pending' && d.status === 'insufficient_funds') {
+                    existing.status = 'insufficient_funds'
+                }
+            }
+        })
+        
+        let finalDeliveries = Object.values(mergedDeliveries)
+
+        // Sort if optimized
+        if (isOptimized) {
+            const stops = finalDeliveries.filter(d => d.lat && d.lng && d.status !== 'delivered') // only optimize pending
+            const missingStops = finalDeliveries.filter(d => !d.lat || !d.lng || d.status === 'delivered')
+            
+            if (stops.length > 0) {
+                const startLat = deliverySession?.current_lat ?? stops[0].lat
+                const startLng = deliverySession?.current_lng ?? stops[0].lng
+                
+                const remaining = [...stops]
+                const ordered = []
+                let curLat = startLat
+                let curLng = startLng
+                
+                while (remaining.length > 0) {
+                    let bestIdx = 0
+                    let bestDist = Infinity
+                    remaining.forEach((s, i) => {
+                        const dist = Math.hypot(s.lat - curLat, s.lng - curLng)
+                        if (dist < bestDist) { bestDist = dist; bestIdx = i }
+                    })
+                    const next = remaining.splice(bestIdx, 1)[0]
+                    ordered.push(next)
+                    curLat = next.lat
+                    curLng = next.lng
+                }
+                finalDeliveries = [...missingStops.filter(d => d.status === 'delivered'), ...ordered, ...missingStops.filter(d => d.status !== 'delivered')]
+            }
+        }
+
+        return finalDeliveries
+    }, [subscriptions, customers, pauses, orders, completedDeliveries, date, partialSkips, activeSlot, isOptimized, deliverySession])
 
     function openScanModal(d) {
         setScanModal({ delivery: d })
@@ -309,17 +381,24 @@ export default function DeliveryDashboard() {
         const d = photoModal.delivery
         setUploading(true)
         try {
-            // 1. Upload photo
-            await uploadDeliveryPhoto(photoFile, d.type, d.id, date)
+            // 1. Upload photo using primary type/id
+            const primaryType = d.type === 'mixed' ? 'subscription' : d.type
+            await uploadDeliveryPhoto(photoFile, primaryType, d.id, date)
 
-            // 2. Mark as delivered
-            if (d.type === 'order') {
-                await markOrderDelivered(d.id, d.customerId, d.amount, date)
-                await refetchOrders()
-            } else {
-                await markSubscriptionDelivered(d.customerId, d.id, date, d.amount)
-                await refetchComp()
-            }
+            // 2. Mark all sources as delivered
+            const promises = d.sourceIds.map(async (source) => {
+                if (source.type === 'order') {
+                    return markOrderDelivered(source.id, d.customerId, source.amount, date)
+                } else {
+                    return markSubscriptionDelivered(d.customerId, source.id, date, source.amount)
+                }
+            })
+            
+            await Promise.all(promises)
+
+            await refetchOrders()
+            await refetchComp()
+            
             toast.success('✅ Delivery confirmed with photo!')
             playSuccessSound()
             closePhotoModal()
@@ -346,7 +425,20 @@ export default function DeliveryDashboard() {
                         <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Driver Route</h1>
                         <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>Your active run sheet.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button 
+                            className={`btn-secondary ${isOptimized ? 'active' : ''}`}
+                            onClick={() => setIsOptimized(!isOptimized)}
+                            style={{ 
+                                padding: '0.5rem', borderRadius: 8, fontSize: '0.875rem', 
+                                background: isOptimized ? '#eff6ff' : 'white',
+                                borderColor: isOptimized ? '#3b82f6' : '#e2e8f0',
+                                color: isOptimized ? '#2563eb' : '#64748b',
+                                display: 'flex', alignItems: 'center', gap: '0.4rem'
+                            }}
+                        >
+                            <MapPin size={14} /> {isOptimized ? 'Route Optimized' : 'Optimize Route'}
+                        </button>
                         <select
                             className="input"
                             value={activeSlot}

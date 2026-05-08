@@ -273,6 +273,11 @@ export default function AdminDelivery() {
                         paint: { 'line-color': '#2563eb', 'line-width': 4, 'line-opacity': 0.85 }
                     })
                     routeLayerRef.current = true
+
+                    // Fit map bounds to the route polyline
+                    const routeBounds = new maplibregl.LngLatBounds()
+                    coords.forEach(coord => routeBounds.extend(coord))
+                    map.fitBounds(routeBounds, { padding: 60, maxZoom: 15, duration: 800 })
                 }
 
                 // Calculate stats
@@ -503,20 +508,17 @@ export default function AdminDelivery() {
             }
         })
 
-        // 3. Fit Bounds — only if we actually have valid coordinate points
-        if (hasPoints) {
+        // 3. Fit Bounds — only if we actually have valid coordinate points and we haven't already fit to an optimized route
+        if (hasPoints && optimizedRoute.length === 0) {
             try {
-                // Validate that bounds is properly initialized before calling fitBounds
-                const sw = bounds.getSouthWest()
-                const ne = bounds.getNorthEast()
-                if (sw && ne && sw.lng !== undefined && ne.lng !== undefined) {
+                if (!bounds.isEmpty()) {
                     map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 800 })
                 }
             } catch (e) {
                 console.warn('fitBounds failed, falling back to default center:', e)
                 map.flyTo({ center: [77.5946, 12.9716], zoom: 12 })
             }
-        } else {
+        } else if (!hasPoints) {
             // No coordinates yet — stay at default center with a helpful message
             console.log('AdminDelivery: No customer coordinates found, staying at default center')
         }
