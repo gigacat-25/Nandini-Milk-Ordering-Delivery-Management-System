@@ -234,17 +234,14 @@ export default function AdminDelivery() {
             const ordered = nearestNeighbour(stops, startLat, startLng)
             setOptimizedRoute(ordered)
 
-            // Call Ola Maps Directions API for the full polyline + stats
-            // Build waypoints: origin -> each stop in order
-            const origin = `${startLat},${startLng}`
-            const destination = `${ordered[ordered.length - 1].lat},${ordered[ordered.length - 1].lng}`
-            const waypoints = ordered.slice(0, -1).map(s => `${s.lat},${s.lng}`).join('|')
+            // Call Directions API via our backend proxy (avoids CORS)
+            const originParam = `${startLat},${startLng}`
+            const destParam = `${ordered[ordered.length - 1].lat},${ordered[ordered.length - 1].lng}`
+            const waypointsParam = ordered.slice(0, -1).map(s => `${s.lat},${s.lng}`).join('|')
 
-            const url = `https://api.olamaps.io/routing/v1/directions?origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ''}&mode=driving&alternatives=false&steps=false&overview=full&language=en&traffic_metadata=false`
+            const proxyUrl = `${API_BASE}/directions?origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}${waypointsParam ? `&waypoints=${encodeURIComponent(waypointsParam)}` : ''}`
 
-            const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${olaToken}` }
-            })
+            const res = await fetch(proxyUrl)
             const data = await res.json()
 
             const route = data?.routes?.[0]

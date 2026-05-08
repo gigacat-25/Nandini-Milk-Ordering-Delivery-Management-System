@@ -884,4 +884,27 @@ app.post('/upload', async (c) => {
   return c.json({ key, url });
 })
 
+// --- Ola Maps Directions Proxy (avoids CORS from browser) ---
+app.get('/directions', async (c) => {
+  try {
+    const { origin, destination, waypoints } = c.req.query()
+    if (!origin || !destination) return c.json({ error: 'origin and destination required' }, 400)
+
+    // Get the cached token using our existing helper
+    const accessToken = await getOlaAccessToken(c.env);
+
+    let url = `https://api.olamaps.io/routing/v1/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&alternatives=false&steps=false&overview=full&language=en&traffic_metadata=false`
+    if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`
+
+    const dirRes = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    })
+    const dirData = await dirRes.json()
+    return c.json(dirData)
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 export default app
+
