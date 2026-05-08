@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moove-milk-v1';
+const CACHE_NAME = 'moove-milk-v2';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
