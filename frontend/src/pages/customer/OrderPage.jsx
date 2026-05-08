@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar, Navigation, MessageSquare, Clock, ArrowRight, ArrowLeft, ShoppingBag } from 'lucide-react'
+import { Trash2, Minus, Plus, CreditCard, CheckCircle, MapPin, Calendar, Navigation, MessageSquare, Clock, ArrowRight, ArrowLeft, ShoppingBag, Smartphone, Info } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCartStore } from '../../store'
 import { formatCurrency, formatDate } from '../../lib/utils'
@@ -14,13 +14,15 @@ export default function OrderPage() {
     const navigate = useNavigate()
     const { user } = useUser()
     const [step, setStep] = useState(1) // 1=cart, 2=address, 3=payment, 4=confirmed
-    const [address, setAddress] = useState('')
-    const [mapsUrl, setMapsUrl] = useState('')
-    const location = useLocation()
-    const queryParams = new URLSearchParams(location.search)
-    const orderTypeUrl = queryParams.get('type') || 'one-time'
-    
+    const [houseNo, setHouseNo] = useState('')
+    const [area, setArea] = useState('')
+    const [phone, setPhone] = useState('')
+    const [addressLabel, setAddressLabel] = useState('Home')
     const [instructions, setInstructions] = useState('')
+    const [latitude, setLatitude] = useState(null)
+    const [longitude, setLongitude] = useState(null)
+    const [mapsUrl, setMapsUrl] = useState('')
+    
     const [orderType, setOrderType] = useState(orderTypeUrl)
     const [frequency, setFrequency] = useState('daily')
     const [deliverySlot, setDeliverySlot] = useState('morning')
@@ -82,9 +84,14 @@ export default function OrderPage() {
 
     useEffect(() => {
         if (profile) {
-            if (profile.address) setAddress(profile.address)
-            if (profile.google_maps_url) setMapsUrl(profile.google_maps_url)
-            if (profile.delivery_instructions) setInstructions(profile.delivery_instructions)
+            setHouseNo(profile.house_no || '')
+            setArea(profile.area || '')
+            setPhone(profile.phone || user?.primaryPhoneNumber?.phoneNumber || '')
+            setAddressLabel(profile.address_label || 'Home')
+            setInstructions(profile.delivery_instructions || '')
+            setMapsUrl(profile.google_maps_url || '')
+            setLatitude(profile.latitude || null)
+            setLongitude(profile.longitude || null)
         }
     }, [profile])
 
@@ -97,10 +104,14 @@ export default function OrderPage() {
             
             console.log('Updating user profile...');
             await updateUserProfile(user.id, {
-                address,
-                google_maps_url: mapsUrl,
+                house_no: houseNo,
+                area: area,
+                address_label: addressLabel,
                 delivery_instructions: instructions,
-                phone: profile?.phone || user?.primaryPhoneNumber?.phoneNumber || ''
+                google_maps_url: mapsUrl,
+                latitude: latitude,
+                longitude: longitude,
+                phone: phone || profile?.phone || user?.primaryPhoneNumber?.phoneNumber || ''
             })
 
             let finalOrderId = '';
@@ -251,56 +262,147 @@ export default function OrderPage() {
                                         )}
                                     </div>
                                 </motion.div>
-                            )}
-
                             {step === 2 && (
-                                <motion.div key="step2" initial="hidden" animate="visible" exit={{ opacity: 0, x: -10 }} variants={containerVariants} className="card p-8 space-y-8 border-slate-100 shadow-xl shadow-slate-200/30">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
-                                                <MapPin size={12} /> Full Delivery Address
-                                            </label>
-                                            <textarea className="input h-28 resize-none font-bold" value={address} onChange={e => setAddress(e.target.value)} required />
-                                        </div>
-                                        <div className="space-y-6">
-                                            <div className="space-y-3">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
-                                                    <Navigation size={12} /> Google Maps Pin Link
-                                                </label>
-                                                <input className="input !py-4 font-bold" type="url" value={mapsUrl} onChange={e => setMapsUrl(e.target.value)} />
+                                <motion.div key="step2" initial="hidden" animate="visible" exit={{ opacity: 0, x: -10 }} variants={containerVariants} className="space-y-6">
+                                    <div className="card p-6 md:p-10 space-y-8 border-slate-100 shadow-xl shadow-slate-200/30">
+                                        <div className="flex items-center gap-4 border-b border-slate-50 pb-6">
+                                            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                                                <Navigation size={24} />
                                             </div>
-                                            <div className="space-y-3">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2 ml-1">
-                                                    <MessageSquare size={12} /> Delivery Notes
-                                                </label>
-                                                <input className="input !py-4 font-bold" type="text" placeholder="Gate code, door color..." value={instructions} onChange={e => setInstructions(e.target.value)} />
+                                            <div>
+                                                <h2 className="text-xl font-black text-slate-900 tracking-tight">Delivery Location</h2>
+                                                <p className="text-slate-400 font-medium text-xs">Where should we drop off your fresh milk?</p>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-50">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Time Slot</label>
-                                            <select className="input !py-4 font-bold" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
-                                                <option value="morning">🌅 Morning (Before 7 AM)</option>
-                                                <option value="evening">🌆 Evening (After 5 PM)</option>
-                                            </select>
-                                        </div>
-                                        {orderType === 'one-time' ? (
-                                            <div className="space-y-3">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select Delivery Date</label>
-                                                <input className="input !py-4 font-bold" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} min={minDateStr} />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            {/* Left Side: Address Fields */}
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">House / Flat / Block No.</label>
+                                                    <div className="relative group">
+                                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors">
+                                                            <MapPin size={18} />
+                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            className="input !pl-12 !py-4.5 font-bold text-sm shadow-sm"
+                                                            placeholder="e.g. Drno: 45-54-A"
+                                                            value={houseNo}
+                                                            onChange={e => setHouseNo(e.target.value)}
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Apartment / Road / Area (Optional)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="input !py-4.5 font-bold text-sm shadow-sm"
+                                                        placeholder="e.g. Prestige Heights / Residency Road"
+                                                        value={area}
+                                                        onChange={e => setArea(e.target.value)}
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Contact Number (Required)</label>
+                                                    <div className="relative group">
+                                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors">
+                                                            <Smartphone size={18} />
+                                                        </div>
+                                                        <input
+                                                            type="tel"
+                                                            className="input !pl-12 !py-4.5 font-bold text-sm shadow-sm"
+                                                            placeholder="e.g. 9876543210"
+                                                            value={phone}
+                                                            onChange={e => setPhone(e.target.value)}
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-3 pt-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Address Type</label>
+                                                    <div className="flex gap-2">
+                                                        {['Home', 'Work', 'Other'].map(label => (
+                                                            <button
+                                                                key={label}
+                                                                type="button"
+                                                                onClick={() => setAddressLabel(label)}
+                                                                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 ${
+                                                                    addressLabel === label 
+                                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' 
+                                                                    : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
+                                                                }`}
+                                                            >
+                                                                {label === 'Home' ? '🏠 ' : label === 'Work' ? '🏢 ' : '📍 '}{label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        ) : (
+
+                                            {/* Right Side: Notes and Maps */}
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                                                        <MessageSquare size={12} /> Delivery Notes / Directions
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <textarea
+                                                            className="input !py-4 h-32 resize-none font-bold italic text-slate-600 text-sm shadow-sm"
+                                                            placeholder="e.g. Ring the bell on the red gate, or leave it at the security desk..."
+                                                            value={instructions}
+                                                            maxLength={200}
+                                                            onChange={e => setInstructions(e.target.value)}
+                                                        />
+                                                        <div className="absolute bottom-3 right-4 text-[9px] font-bold text-slate-300">
+                                                            {instructions?.length || 0}/200
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                                                        <Navigation size={12} /> Google Maps Link (Optional)
+                                                    </label>
+                                                    <input 
+                                                        className="input !py-4 font-bold text-sm shadow-sm" 
+                                                        type="url" 
+                                                        placeholder="Paste google maps link here"
+                                                        value={mapsUrl} 
+                                                        onChange={e => setMapsUrl(e.target.value)} 
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-50">
                                             <div className="space-y-3">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Frequency</label>
-                                                <select className="input !py-4 font-bold" value={frequency} onChange={e => setFrequency(e.target.value)}>
-                                                    <option value="daily">Every Day</option>
-                                                    <option value="alternate">Alternate Days</option>
-                                                    <option value="weekly">Once a Week</option>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Time Slot</label>
+                                                <select className="input !py-4.5 font-bold text-sm bg-white shadow-sm" value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}>
+                                                    <option value="morning">🌅 Morning (Before 7 AM)</option>
+                                                    <option value="evening">🌆 Evening (After 5 PM)</option>
                                                 </select>
                                             </div>
-                                        )}
+                                            {orderType === 'one-time' ? (
+                                                <div className="space-y-3">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Date</label>
+                                                    <input className="input !py-4.5 font-bold text-sm shadow-sm" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} min={minDateStr} />
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Delivery Frequency</label>
+                                                    <select className="input !py-4.5 font-bold text-sm bg-white shadow-sm" value={frequency} onChange={e => setFrequency(e.target.value)}>
+                                                        <option value="daily">Every Day</option>
+                                                        <option value="alternate">Alternate Days</option>
+                                                        <option value="weekly">Once a Week</option>
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </motion.div>
                             )}
@@ -387,7 +489,11 @@ export default function OrderPage() {
                                 )}
                                 {step === 2 && (
                                     <>
-                                        <button onClick={() => { if (!address) toast.error('Enter address'); else setStep(3) }} className="btn-primary w-full !py-4.5 shadow-xl shadow-blue-500/20 group">
+                                        <button onClick={() => { 
+                                            if (!houseNo) return toast.error('Enter house number'); 
+                                            if (!phone) return toast.error('Enter contact number');
+                                            setStep(3);
+                                        }} className="btn-primary w-full !py-4.5 shadow-xl shadow-blue-500/20 group">
                                             Confirm Order <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                         </button>
                                         <button onClick={() => setStep(1)} className="btn-secondary w-full !py-4 border-none text-slate-400 flex items-center justify-center gap-2">
