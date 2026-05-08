@@ -824,6 +824,27 @@ export default function AdminDelivery() {
                                         <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#059669' }}></span> Delivered
                                     </div>
                                 </div>
+                                <button
+                                    onClick={() => {
+                                        if (!mapRef.current) return;
+                                        const lat = Number(deliverySession?.current_lat);
+                                        const lng = Number(deliverySession?.current_lng);
+                                        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                                            mapRef.current.map.flyTo({ center: [lng, lat], zoom: 15, duration: 1000 });
+                                        } else {
+                                            toast.error('Driver location not available yet.');
+                                        }
+                                    }}
+                                    style={{
+                                        position: 'absolute', top: 12, right: 12, zIndex: 1000,
+                                        background: 'white', color: '#2563eb', padding: '0.5rem 1rem',
+                                        borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                        fontWeight: 700, fontSize: '0.85rem', border: '1px solid #bfdbfe',
+                                        display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'
+                                    }}
+                                >
+                                    <Navigation size={16} /> Locate Driver
+                                </button>
                                 <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
                             </div>
 
