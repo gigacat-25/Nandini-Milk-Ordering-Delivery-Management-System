@@ -24,6 +24,9 @@ export default function OrderPage() {
     const [longitude, setLongitude] = useState(null)
     const [mapsUrl, setMapsUrl] = useState('')
     
+    const location = useLocation()
+    const queryParams = new URLSearchParams(location.search)
+    const orderTypeUrl = queryParams.get('type') || 'one-time'
     const [orderType, setOrderType] = useState(orderTypeUrl)
     const [frequency, setFrequency] = useState('daily')
     const [deliverySlot, setDeliverySlot] = useState('morning')
