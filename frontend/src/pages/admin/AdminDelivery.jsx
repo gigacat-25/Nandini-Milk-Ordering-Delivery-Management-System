@@ -11,11 +11,11 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 export default function AdminDelivery() {
     const { user } = useUser()
-    const { data: subscriptions, loading: subsLoading } = useSubscriptions()
-    const { data: customers, loading: custLoading } = useCustomers()
+    const { data: subscriptions, loading: subsLoading, refetch: refetchSubs } = useSubscriptions()
+    const { data: customers, loading: custLoading, refetch: refetchCust } = useCustomers()
     const [date, setDate] = useState(new Date().toISOString().split('T')[0])
     const [activeSlot, setActiveSlot] = useState('morning')
-    const { data: pauses, loading: pausesLoading } = useSubscriptionPauses(date)
+    const { data: pauses, loading: pausesLoading, refetch: refetchPauses } = useSubscriptionPauses(date)
     const { data: orders, loading: ordersLoading, refetch: refetchOrders } = useOrdersByDate(date, 'delivery')
     const { data: completedDeliveries, loading: compLoading, refetch: refetchComp } = useDeliveries(date)
     const { data: deliverySession, refetch: refetchSession } = useDeliverySession(date, activeSlot)
@@ -23,6 +23,7 @@ export default function AdminDelivery() {
     const [olaToken, setOlaToken] = useState(null)
 
     const [updatingId, setUpdatingId] = useState(null)
+    const [refreshing, setRefreshing] = useState(false)
     const [sessionLoading, setSessionLoading] = useState(false)
     const isSessionActive = !!deliverySession
     const [photoLightbox, setPhotoLightbox] = useState(null) // photo URL string
@@ -420,6 +421,8 @@ export default function AdminDelivery() {
             const lat = Number(cust.latitude)
             const lng = Number(cust.longitude)
 
+            if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
+
             const isDelivered = d.status === 'delivered'
             const color = isDelivered ? '#059669' : '#f59e0b'
             // Show optimized order number if route is computed
@@ -468,7 +471,8 @@ export default function AdminDelivery() {
             const lat = Number(deliverySession.current_lat)
             const lng = Number(deliverySession.current_lng)
 
-            if (!driverMarkerRef.current) {
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                if (!driverMarkerRef.current) {
                 const el = document.createElement('div')
                 el.style.background = '#2563eb'
                 el.style.color = 'white'
@@ -496,21 +500,30 @@ export default function AdminDelivery() {
                 driverMarkerRef.current.setLngLat([lng, lat])
             }
         }
+    }
 
         // 3. Fit Bounds
         const bounds = new maplibregl.LngLatBounds()
         let hasPoints = false
 
         if (deliverySession?.current_lat && deliverySession?.current_lng) {
-            bounds.extend([Number(deliverySession.current_lng), Number(deliverySession.current_lat)])
-            hasPoints = true
+            const lat = Number(deliverySession.current_lat)
+            const lng = Number(deliverySession.current_lng)
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                bounds.extend([lng, lat])
+                hasPoints = true
+            }
         }
 
         activeDeliveries.forEach(d => {
             const cust = customers.find(c => c.id === d.customerId)
             if (cust?.latitude && cust?.longitude) {
-                bounds.extend([Number(cust.longitude), Number(cust.latitude)])
-                hasPoints = true
+                const lat = Number(cust.latitude)
+                const lng = Number(cust.longitude)
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    bounds.extend([lng, lat])
+                    hasPoints = true
+                }
             }
         })
 
@@ -522,7 +535,7 @@ export default function AdminDelivery() {
                 }
             } catch (e) {
                 console.warn('fitBounds failed, falling back to default center:', e)
-                map.flyTo({ center: [77.5946, 12.9716], zoom: 12 })
+                map.flyTo({ center: [77.5946, 12.9716], zoom: 12, duration: 800 })
             }
         } else if (!hasPoints) {
             // No coordinates yet — stay at default center with a helpful message
@@ -646,6 +659,27 @@ export default function AdminDelivery() {
         toast.success('Delivery sheet exported!')
     }
 
+    async function handleRefresh() {
+        setRefreshing(true)
+        try {
+            await Promise.all([
+                refetchSubs(),
+                refetchCust(),
+                refetchPauses(),
+                refetchOrders(),
+                refetchComp(),
+                refetchSession(),
+                refetchSkips(),
+                refetchPhotos()
+            ])
+            toast.success('Data synced successfully')
+        } catch (err) {
+            toast.error('Failed to sync data: ' + err.message)
+        } finally {
+            setRefreshing(false)
+        }
+    }
+
     const activeDeliveries = deliveries.filter(d => d.status !== 'cancelled')
     const pending = activeDeliveries.filter(d => d.status === 'pending').length
     const delivered = activeDeliveries.filter(d => d.status === 'delivered').length
@@ -704,6 +738,14 @@ export default function AdminDelivery() {
                                 </button>
                             )}
                             <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 'auto', padding: '0.5rem 0.75rem', borderRadius: 10, fontSize: '0.85rem' }} />
+                            <button 
+                                className="btn-secondary" 
+                                onClick={handleRefresh} 
+                                disabled={refreshing}
+                                style={{ padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'white', border: '1px solid #e2e8f0', color: '#64748b' }}
+                            >
+                                <RotateCcw size={14} className={refreshing ? "spin" : ""} /> {refreshing ? 'Syncing...' : 'Refresh'}
+                            </button>
                             <button className="btn-primary" onClick={exportCSV} style={{ padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem' }}><Download size={14} /> Export</button>
                         </div>
                     </div>
