@@ -10,8 +10,12 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
     const mapContainerRef = useRef(null)
     const mapRef = useRef(null)
     const markerRef = useRef(null)
+    const hasSetInitialRef = useRef(false) // Track if we've applied an external initialPosition
     
-    const [position, setPosition] = useState(initialPosition || { lat: 12.9716, lng: 77.5946 })
+    const defaultPos = { lat: 12.9716, lng: 77.5946 } // Bengaluru
+    const [position, setPosition] = useState(
+        (initialPosition?.lat && initialPosition?.lng) ? initialPosition : defaultPos
+    )
     const [detecting, setDetecting] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [olaToken, setOlaToken] = useState(null)
@@ -92,6 +96,7 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
                         marker.on('dragend', () => {
                             const lngLat = marker.getLngLat()
                             const newPos = { lat: lngLat.lat, lng: lngLat.lng }
+                            isUserInteractionRef.current = true
                             setPosition(newPos)
                         })
 
@@ -111,6 +116,7 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
                 map.on('click', (e) => {
                     const { lng, lat } = e.lngLat
                     const newPos = { lat, lng }
+                    isUserInteractionRef.current = true
                     setPosition(newPos)
                     if (markerRef.current) {
                         markerRef.current.setLngLat([lng, lat])
@@ -138,9 +144,21 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
         }
     }, [olaToken]) // Re-run when token is acquired
 
+    // Sync position when initialPosition changes externally (e.g., profile data loaded from DB)
+    useEffect(() => {
+        if (initialPosition?.lat && initialPosition?.lng && !hasSetInitialRef.current) {
+            hasSetInitialRef.current = true
+            setPosition({ lat: Number(initialPosition.lat), lng: Number(initialPosition.lng) })
+        }
+    }, [initialPosition])
+
     // Update parent and reverse geocode when position changes
+    // Use a ref to track if this is a user-initiated change vs initial render
+    const isUserInteractionRef = useRef(false)
     useEffect(() => {
         if (!position || !olaToken) return
+        // Only call onLocationChange if user interacted (not on first render with default pos)
+        if (!isUserInteractionRef.current) return
         onLocationChange(position)
 
         // Reverse Geocoding using Ola Maps API with JWT/Token
@@ -157,6 +175,7 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
             })
             .catch(err => console.error("Ola Geocoding error:", err))
     }, [position, olaToken])
+
 
     // Update marker when position changes externally or via map click
     useEffect(() => {
@@ -192,7 +211,7 @@ export default function MapPicker({ initialPosition, onLocationChange, onAddress
                     accuracy: pos.coords.accuracy,
                     _isAuto: true 
                 }
-                
+                isUserInteractionRef.current = true
                 setPosition(newPos)
                 
                 if (pos.coords.accuracy < 30 || attempts >= 5) {

@@ -98,37 +98,21 @@ app.put('/products/global/cutoffs', async (c) => {
 app.post('/users/upsert', async (c) => {
   const body = await c.req.json();
   console.log('[POST /users/upsert] Body:', JSON.stringify(body));
-  const { id, email, phone, full_name, latitude, longitude, house_no, area, address_label } = body;
+  const { id, email, phone, full_name } = body;
 
   try {
+    // On conflict (login sync from Clerk), ONLY update email/name.
+    // NEVER overwrite phone, address, or coordinates — those are set by the user on the Profile page.
     const query = `
-      INSERT INTO users (id, email, phone, full_name, role, latitude, longitude, house_no, area, address_label)
-      VALUES (?, ?, ?, ?, 'customer', ?, ?, ?, ?, ?)
+      INSERT INTO users (id, email, phone, full_name, role)
+      VALUES (?, ?, ?, ?, 'customer')
       ON CONFLICT(id) DO UPDATE SET
         email = COALESCE(excluded.email, users.email),
-        full_name = COALESCE(excluded.full_name, users.full_name),
-        -- Prioritize app-provided phone if it exists, otherwise use Clerk phone
-        phone = COALESCE(excluded.phone, users.phone),
-        -- Prioritize app-provided address data
-        latitude = COALESCE(excluded.latitude, users.latitude),
-        longitude = COALESCE(excluded.longitude, users.longitude),
-        house_no = COALESCE(excluded.house_no, users.house_no),
-        area = COALESCE(excluded.area, users.area),
-        address_label = COALESCE(excluded.address_label, users.address_label)
+        full_name = COALESCE(excluded.full_name, users.full_name)
     `;
 
     const result = await c.env.DB.prepare(query)
-      .bind(
-        id, 
-        email, 
-        phone, 
-        full_name, 
-        latitude ?? null, 
-        longitude ?? null, 
-        house_no ?? null, 
-        area ?? null, 
-        address_label ?? 'Home'
-      )
+      .bind(id, email || null, phone || null, full_name || null)
       .run();
     
     console.log('[POST /users/upsert] Success:', result.meta);
@@ -138,6 +122,7 @@ app.post('/users/upsert', async (c) => {
     return c.json({ error: e.message }, 500);
   }
 })
+
 
 app.get('/users/:id', async (c) => {
   const id = c.req.param('id');
@@ -713,67 +698,77 @@ app.put('/users/:id', async (c) => {
     const body = await c.req.json();
     console.log(`[PUT /users/${id}] Updating with:`, JSON.stringify(body));
 
-    // Ensure numeric values for coordinates
-    const latitude = body.latitude !== undefined ? Number(body.latitude) : (body.lat !== undefined ? Number(body.lat) : null);
-    const longitude = body.longitude !== undefined ? Number(body.longitude) : (body.lng !== undefined ? Number(body.lng) : null);
+    // Properly parse coordinates - only convert to number if value is actually a number/string number
+    // Number(null) = 0 which is WRONG, so we must check first
+    const rawLat = body.latitude !== undefined ? body.latitude : body.lat;
+    const rawLng = body.longitude !== undefined ? body.longitude : body.lng;
+    const latitude = (rawLat !== null && rawLat !== undefined && rawLat !== '') ? Number(rawLat) : null;
+    const longitude = (rawLng !== null && rawLng !== undefined && rawLng !== '') ? Number(rawLng) : null;
+
+    // Only set phone if it's a non-empty string
+    const phone = (body.phone !== null && body.phone !== undefined && body.phone !== '') ? body.phone : null;
 
     try {
-        // First try updating
+        // Use COALESCE to preserve existing values when new values are null
+        // This prevents the upsert/sync from wiping out saved profile data
         const updateQuery = `
             UPDATE users SET 
-                address = ?, 
-                delivery_instructions = ?, 
-                google_maps_url = ?, 
-                phone = ?,
-                latitude = ?,
-                longitude = ?,
-                house_no = ?,
-                area = ?,
-                address_label = ?
+                address = COALESCE(?, address), 
+                delivery_instructions = ?,
+                google_maps_url = COALESCE(?, google_maps_url), 
+                phone = COALESCE(?, phone),
+                latitude = COALESCE(?, latitude),
+                longitude = COALESCE(?, longitude),
+                house_no = COALESCE(?, house_no),
+                area = COALESCE(?, area),
+                address_label = COALESCE(?, address_label),
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `;
         
         const result = await c.env.DB.prepare(updateQuery).bind(
-            body.address ?? null, 
-            body.delivery_instructions ?? null, 
-            body.google_maps_url ?? null, 
-            body.phone ?? null, 
+            body.address || null, 
+            body.delivery_instructions || null,
+            body.google_maps_url || null, 
+            phone, 
             latitude, 
             longitude, 
-            body.house_no ?? null, 
-            body.area ?? null, 
-            body.address_label ?? 'Home',
+            body.house_no || null, 
+            body.area || null, 
+            body.address_label || null,
             id
         ).run();
 
         if (result.meta?.changes === 0) {
             console.log(`[PUT /users/${id}] No record found, performing INSERT fallback`);
-            // If update fails, insert (fallback for new users)
             const insertQuery = `
                 INSERT INTO users (id, phone, address, latitude, longitude, house_no, area, address_label, full_name, email, role)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'customer')
             `;
             await c.env.DB.prepare(insertQuery).bind(
                 id,
-                body.phone ?? null,
-                body.address ?? null,
+                phone,
+                body.address || null,
                 latitude,
                 longitude,
-                body.house_no ?? null,
-                body.area ?? null,
-                body.address_label ?? 'Home',
-                body.full_name ?? null,
-                body.email ?? null
+                body.house_no || null,
+                body.area || null,
+                body.address_label || 'Home',
+                body.full_name || null,
+                body.email || null
             ).run();
         }
 
-        console.log(`[PUT /users/${id}] Success`);
-        return c.json({ success: true });
+        // Return the updated user so frontend can sync
+        const updated = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+        console.log(`[PUT /users/${id}] Success, returning:`, JSON.stringify(updated));
+        return c.json({ success: true, user: updated });
     } catch (e: any) {
         console.error(`[PUT /users/${id}] Error:`, e.message);
         return c.json({ error: e.message }, 500);
     }
 })
+
 
 app.get('/users', async (c) => {
     try {

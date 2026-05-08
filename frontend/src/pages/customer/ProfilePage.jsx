@@ -68,30 +68,55 @@ export default function ProfilePage() {
 
         setSaving(true)
         try {
-            // Update map URL if we have coordinates
-            const mapUrl = profile.latitude && profile.longitude 
-                ? `https://maps.olamaps.io/z/17/${profile.latitude},${profile.longitude}`
-                : profile.google_maps_url;
+            // Build google maps URL from coordinates if available
+            const mapUrl = (profile.latitude && profile.longitude)
+                ? `https://maps.google.com/?q=${profile.latitude},${profile.longitude}`
+                : (profile.google_maps_url || null);
 
-            // Sanitize profile data to remove nulls/undefined/empty strings that backend might reject
-            // Only filter out null/undefined, keep empty strings so we can clear fields if needed
-            const sanitizedProfile = Object.fromEntries(
-                Object.entries({
-                    ...profile,
-                    google_maps_url: mapUrl
-                }).filter(([_, v]) => v !== undefined)
-            );
+            const payload = {
+                phone: profile.phone || null,
+                address: profile.house_no && profile.area 
+                    ? `${profile.house_no}, ${profile.area}` 
+                    : (profile.address || null),
+                house_no: profile.house_no || null,
+                area: profile.area || null,
+                delivery_instructions: profile.delivery_instructions || null,
+                google_maps_url: mapUrl,
+                address_label: profile.address_label || 'Home',
+                latitude: (profile.latitude !== null && profile.latitude !== undefined) ? Number(profile.latitude) : null,
+                longitude: (profile.longitude !== null && profile.longitude !== undefined) ? Number(profile.longitude) : null,
+            };
+
+            console.log('[ProfilePage] Saving payload:', payload);
 
             const token = await getToken();
-            await updateUserProfile(user.id, sanitizedProfile, token)
+            const result = await updateUserProfile(user.id, payload, token)
+            
+            // Update local state from what the DB actually saved
+            if (result?.user) {
+                setProfile({
+                    address: result.user.address || '',
+                    delivery_instructions: result.user.delivery_instructions || '',
+                    google_maps_url: result.user.google_maps_url || '',
+                    phone: result.user.phone || '',
+                    latitude: result.user.latitude ?? null,
+                    longitude: result.user.longitude ?? null,
+                    house_no: result.user.house_no || '',
+                    area: result.user.area || '',
+                    address_label: result.user.address_label || 'Home',
+                })
+            }
+
             toast.success('Delivery details saved successfully!')
             refetchProfile()
         } catch (err) {
+            console.error('[ProfilePage] Save error:', err);
             toast.error('Failed to save details: ' + err.message)
         } finally {
             setSaving(false)
         }
     }
+
 
     async function handlePayment() {
         if (!user) return
